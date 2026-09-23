@@ -23,6 +23,7 @@ from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
 from score_jev_v1 import online_alfworld_transition, parse_effect_response
 from verl.trainer.ppo.core_algos import (
     compute_grpo_outcome_advantage,
+    compute_jev_group_grpo_advantage,
     compute_jev_step_grpo_advantage,
 )
 
@@ -148,6 +149,24 @@ def main():
     assert len(set(step_advantages[:3, 0].tolist())) > 1
     assert metrics["nonconstant_trajectory_fraction"] > 0
     assert metrics["outcome_equivalent_nonzero_fraction"] > 0
+
+    group_scores = np.array([0.9, 0.7, 0.4, 0.2], dtype=np.float32)
+    group_confidences = np.array([1.0, 0.5, 1.0, 0.5], dtype=np.float32)
+    group_advantages, _, group_metrics = compute_jev_group_grpo_advantage(
+        token_level_rewards=torch.zeros((4, 1)),
+        response_mask=torch.ones((4, 1)),
+        effect_scores=group_scores,
+        confidences=group_confidences,
+        index=np.array(["group"] * 4),
+        traj_index=np.array(["a", "b", "c", "d"]),
+        turn_index=np.zeros(4, dtype=np.int32),
+        verifier_weight=0.0,
+    )
+    weighted_mean = np.average(group_scores, weights=group_confidences)
+    expected = group_confidences * (group_scores - weighted_mean)
+    assert np.allclose(group_advantages[:, 0].numpy(), expected)
+    assert abs(float(np.dot(group_confidences, group_scores - weighted_mean))) < 1e-6
+    assert group_metrics["peer_group_fraction"] == 1.0
 
     outcome_by_traj = np.array([0, 0, 0, 10], dtype=np.float32)
     repeated_outcomes = torch.tensor(np.repeat(outcome_by_traj, 3)).unsqueeze(-1)

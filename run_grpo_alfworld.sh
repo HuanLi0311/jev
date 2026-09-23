@@ -65,11 +65,15 @@ optimizer_offload=${OPTIMIZER_OFFLOAD:-true}
 [[ $optimizer_offload == true || $optimizer_offload == false ]] || { echo 'OPTIMIZER_OFFLOAD must be true or false' >&2; exit 2; }
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
 adv_estimator=${ADV_ESTIMATOR:-grpo}
-[[ $adv_estimator == grpo || $adv_estimator == jev_step_grpo ]] || { echo 'invalid ADV_ESTIMATOR' >&2; exit 2; }
+[[ $adv_estimator == grpo || $adv_estimator == jev_step_grpo || $adv_estimator == jev_group_grpo ]] || { echo 'invalid ADV_ESTIMATOR' >&2; exit 2; }
 jev_reward_mode=${JEV_REWARD_MODE:-trajectory_mean}
-[[ $jev_reward_mode == trajectory_mean || $jev_reward_mode == step_advantage || $jev_reward_mode == hindsight_step_advantage ]] || { echo 'invalid JEV_REWARD_MODE' >&2; exit 2; }
+[[ $jev_reward_mode == trajectory_mean || $jev_reward_mode == step_advantage || $jev_reward_mode == hindsight_step_advantage || $jev_reward_mode == hindsight_group_advantage ]] || { echo 'invalid JEV_REWARD_MODE' >&2; exit 2; }
 if [[ $adv_estimator == jev_step_grpo && $jev_reward_mode != step_advantage && $jev_reward_mode != hindsight_step_advantage ]]; then
     echo 'jev_step_grpo requires a step-advantage JEV_REWARD_MODE' >&2
+    exit 2
+fi
+if [[ $adv_estimator == jev_group_grpo && $jev_reward_mode != hindsight_group_advantage ]]; then
+    echo 'jev_group_grpo requires JEV_REWARD_MODE=hindsight_group_advantage' >&2
     exit 2
 fi
 seed=${SEED:-0}
