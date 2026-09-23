@@ -67,11 +67,13 @@ rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
 adv_estimator=${ADV_ESTIMATOR:-grpo}
 [[ $adv_estimator == grpo || $adv_estimator == jev_step_grpo || $adv_estimator == jev_group_grpo ]] || { echo 'invalid ADV_ESTIMATOR' >&2; exit 2; }
 jev_reward_mode=${JEV_REWARD_MODE:-trajectory_mean}
-[[ $jev_reward_mode == trajectory_mean || $jev_reward_mode == step_advantage || $jev_reward_mode == hindsight_step_advantage || $jev_reward_mode == hindsight_group_advantage ]] || { echo 'invalid JEV_REWARD_MODE' >&2; exit 2; }
-if [[ $adv_estimator == jev_step_grpo && $jev_reward_mode != step_advantage && $jev_reward_mode != hindsight_step_advantage ]]; then
+[[ $jev_reward_mode == trajectory_mean || $jev_reward_mode == step_advantage || $jev_reward_mode == hindsight_step_advantage || $jev_reward_mode == hindsight_group_advantage || $jev_reward_mode == hindsight_step_only_advantage ]] || { echo 'invalid JEV_REWARD_MODE' >&2; exit 2; }
+if [[ $adv_estimator == jev_step_grpo && $jev_reward_mode != step_advantage && $jev_reward_mode != hindsight_step_advantage && $jev_reward_mode != hindsight_step_only_advantage ]]; then
     echo 'jev_step_grpo requires a step-advantage JEV_REWARD_MODE' >&2
     exit 2
 fi
+jev_verifier_weight=${JEV_VERIFIER_WEIGHT:-0.1}
+[[ $jev_verifier_weight =~ ^(0|[0-9]+([.][0-9]+)?)$ ]] || { echo 'JEV_VERIFIER_WEIGHT must be nonnegative' >&2; exit 2; }
 if [[ $adv_estimator == jev_group_grpo && $jev_reward_mode != hindsight_group_advantage ]]; then
     echo 'jev_group_grpo requires JEV_REWARD_MODE=hindsight_group_advantage' >&2
     exit 2
@@ -84,6 +86,7 @@ eval_split=${EVAL_SPLIT:-eval_in_distribution}
 cd "$repo"
 exec "$root/.conda/envs/verl/bin/python" -m verl.trainer.main_ppo \
     algorithm.adv_estimator="$adv_estimator" +algorithm.grpo_cross_steps=false \
+    algorithm.jev_step.verifier_weight="$jev_verifier_weight" \
     data.train_files="$root/data/verl-agent/text/train.parquet" \
     data.val_files="$root/data/verl-agent/text/test.parquet" \
     data.train_batch_size=4 data.val_batch_size="$val_batch_size" data.shuffle=false \

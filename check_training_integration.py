@@ -229,6 +229,19 @@ def main():
     )
     assert torch.allclose(step_baseline, standard_baseline)
 
+    step_only, _, _ = compute_jev_step_grpo_advantage(
+        token_level_rewards=repeated_outcomes,
+        response_mask=masks,
+        effect_scores=effect_scores,
+        confidences=confidences,
+        index=task_ids,
+        traj_index=traj_ids,
+        turn_index=turns,
+        verifier_weight=0.0,
+    )
+    assert abs(step_only[0, 0].item() - 0.2) < 1e-6
+    assert not torch.allclose(step_only, step_advantages + standard_baseline * 0.1)
+
     collector = TrajectoryCollector.__new__(TrajectoryCollector)
     with tempfile.TemporaryDirectory() as directory:
         log_path = str(Path(directory) / "hindsight.jsonl")
