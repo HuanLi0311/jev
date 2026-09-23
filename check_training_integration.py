@@ -291,7 +291,7 @@ def main():
         hindsight_log = json.loads(Path(log_path).read_text())
         assert hindsight_log["trajectory_id"] == "trace"
         assert hindsight_log["task_uid"] == "game"
-    print("online Jev trajectory and V2/V3 step-level GRPO self-check passed")
+    print("online Jev trajectory and V2/V3/V4 step-level GRPO self-check passed")
 
 
 if __name__ == "__main__":
