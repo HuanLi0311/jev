@@ -70,6 +70,8 @@ val_before_train=${VAL_BEFORE_TRAIN:-true}
 optimizer_offload=${OPTIMIZER_OFFLOAD:-true}
 [[ $optimizer_offload == true || $optimizer_offload == false ]] || { echo 'OPTIMIZER_OFFLOAD must be true or false' >&2; exit 2; }
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
+ray_num_cpus=${RAY_NUM_CPUS:-16}
+[[ $ray_num_cpus =~ ^[1-9][0-9]*$ ]] || { echo 'RAY_NUM_CPUS must be a positive integer' >&2; exit 2; }
 adv_estimator=${ADV_ESTIMATOR:-grpo}
 [[ $adv_estimator == grpo || $adv_estimator == jev_step_grpo || $adv_estimator == jev_group_grpo ]] || { echo 'invalid ADV_ESTIMATOR' >&2; exit 2; }
 jev_reward_mode=${JEV_REWARD_MODE:-trajectory_mean}
@@ -129,7 +131,7 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     +env.alfworld.jev_weight="$jev_weight" \
     +env.alfworld.jev_reward_mode="$jev_reward_mode" \
     +env.alfworld.jev_log_path="$run_dir/jev-online.jsonl" \
-    env.resources_per_worker.num_cpus=0.1 ray_init.num_cpus=16 +ray_init.address=local +ray_init.include_dashboard=false \
+    env.resources_per_worker.num_cpus=0.1 ray_init.num_cpus="$ray_num_cpus" +ray_init.address=local +ray_init.include_dashboard=false \
     trainer.logger='["console"]' trainer.project_name=jev_alfworld \
     trainer.experiment_name="$run_tag" trainer.n_gpus_per_node="$gpu_count" trainer.nnodes=1 \
     trainer.save_freq="$save_freq" trainer.test_freq="$test_freq" \
