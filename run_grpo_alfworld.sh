@@ -76,6 +76,8 @@ for value in "$actor_micro_batch" "$log_prob_micro_batch"; do
 done
 ref_param_offload=${REF_PARAM_OFFLOAD:-true}
 [[ $ref_param_offload == true || $ref_param_offload == false ]] || { echo 'REF_PARAM_OFFLOAD must be true or false' >&2; exit 2; }
+persistent_rollout=${PERSISTENT_ROLLOUT:-false}
+[[ $persistent_rollout == true || $persistent_rollout == false ]] || { echo 'PERSISTENT_ROLLOUT must be true or false' >&2; exit 2; }
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
 ray_num_cpus=${RAY_NUM_CPUS:-16}
 [[ $ray_num_cpus =~ ^[1-9][0-9]*$ ]] || { echo 'RAY_NUM_CPUS must be a positive integer' >&2; exit 2; }
@@ -126,6 +128,7 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     actor_rollout_ref.rollout.enforce_eager=true \
     actor_rollout_ref.rollout.enable_chunked_prefill=true \
     actor_rollout_ref.rollout.free_cache_engine=true \
+    +actor_rollout_ref.rollout.persistent_across_turns="$persistent_rollout" \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
     actor_rollout_ref.ref.fsdp_config.param_offload="$ref_param_offload" \
