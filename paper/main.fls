@@ -2,7 +2,7 @@ PWD /home/JJ_Group/lih2511/test/jev/paper
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf.cnf
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/web2c/texmf.cnf
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-var/web2c/pdftex/pdflatex.fmt
-INPUT /home/JJ_Group/lih2511/test/jev/paper/main.tex
+INPUT main.tex
 OUTPUT main.log
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/latex/base/article.cls
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/latex/base/article.cls
@@ -133,8 +133,14 @@ INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/latex/microtype/
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/latex/microtype/mt-ptm.cfg
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/latex/microtype/mt-ptm.cfg
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/latex/graphics/color.sty
-OUTPUT main.out
+INPUT ./main.out
+INPUT ./main.out
+INPUT main.out
+INPUT main.out
 OUTPUT main.pdf
+INPUT ./main.out
+INPUT ./main.out
+OUTPUT main.out
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 INPUT /home/JJ_Group/lih2511/.local/texlive/2026/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
