@@ -168,6 +168,19 @@ def main():
     assert abs(float(np.dot(group_confidences, group_scores - weighted_mean))) < 1e-6
     assert group_metrics["peer_group_fraction"] == 1.0
 
+    # Same trajectory's different turns must never share a Jev baseline.
+    per_turn, _, _ = compute_jev_group_grpo_advantage(
+        token_level_rewards=torch.zeros((4, 1)),
+        response_mask=torch.ones((4, 1)),
+        effect_scores=np.array([0.9, 0.1, 0.5, 0.7]),
+        confidences=np.ones(4),
+        index=np.array(["group"] * 4),
+        traj_index=np.array(["a", "a", "b", "b"]),
+        turn_index=np.array([0, 1, 0, 1]),
+        verifier_weight=0.0,
+    )
+    assert np.allclose(per_turn[:, 0].numpy(), [0.2, -0.3, -0.2, 0.3])
+
     outcome_by_traj = np.array([0, 0, 0, 10], dtype=np.float32)
     repeated_outcomes = torch.tensor(np.repeat(outcome_by_traj, 3)).unsqueeze(-1)
     step_baseline, _, _ = compute_jev_step_grpo_advantage(
@@ -239,7 +252,7 @@ def main():
         hindsight_log = json.loads(Path(log_path).read_text())
         assert hindsight_log["trajectory_id"] == "trace"
         assert hindsight_log["task_uid"] == "game"
-    print("online Jev trajectory and step-level GRPO self-check passed")
+    print("online Jev trajectory and V2/V3 step-level GRPO self-check passed")
 
 
 if __name__ == "__main__":
