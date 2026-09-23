@@ -69,6 +69,16 @@ val_before_train=${VAL_BEFORE_TRAIN:-true}
 [[ $val_before_train == true || $val_before_train == false ]] || { echo 'VAL_BEFORE_TRAIN must be true or false' >&2; exit 2; }
 optimizer_offload=${OPTIMIZER_OFFLOAD:-true}
 [[ $optimizer_offload == true || $optimizer_offload == false ]] || { echo 'OPTIMIZER_OFFLOAD must be true or false' >&2; exit 2; }
+actor_micro_batch=${ACTOR_MICRO_BATCH:-1}
+log_prob_micro_batch=${LOG_PROB_MICRO_BATCH:-1}
+for value in "$actor_micro_batch" "$log_prob_micro_batch"; do
+    [[ $value =~ ^[1-9][0-9]*$ ]] || { echo 'microbatch sizes must be positive integers' >&2; exit 2; }
+done
+remove_padding=${REMOVE_PADDING:-false}
+ref_param_offload=${REF_PARAM_OFFLOAD:-true}
+for value in "$remove_padding" "$ref_param_offload"; do
+    [[ $value == true || $value == false ]] || { echo 'REMOVE_PADDING and REF_PARAM_OFFLOAD must be true or false' >&2; exit 2; }
+done
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
 ray_num_cpus=${RAY_NUM_CPUS:-16}
 [[ $ray_num_cpus =~ ^[1-9][0-9]*$ ]] || { echo 'RAY_NUM_CPUS must be a positive integer' >&2; exit 2; }
@@ -104,9 +114,9 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     actor_rollout_ref.model.path="$model_path" \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.use_torch_compile=false \
-    actor_rollout_ref.model.use_remove_padding=false \
+    actor_rollout_ref.model.use_remove_padding="$remove_padding" \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu="$actor_micro_batch" \
     actor_rollout_ref.actor.use_kl_loss=true \
     actor_rollout_ref.actor.kl_loss_coef=0.01 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
@@ -119,9 +129,9 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     actor_rollout_ref.rollout.enforce_eager=true \
     actor_rollout_ref.rollout.enable_chunked_prefill=true \
     actor_rollout_ref.rollout.free_cache_engine=true \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
-    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
-    actor_rollout_ref.ref.fsdp_config.param_offload=true \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
+    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
+    actor_rollout_ref.ref.fsdp_config.param_offload="$ref_param_offload" \
     actor_rollout_ref.actor.use_invalid_action_penalty=false \
     algorithm.use_kl_in_reward=false \
     env.env_name=alfworld/AlfredTWEnv env.seed="$seed" \
