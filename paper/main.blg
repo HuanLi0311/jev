@@ -3,62 +3,83 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: icml2026.bst
 Database file #1: references.bib
+Warning--empty journal in chen2025reinforcement
+Warning--empty year in chen2025reinforcement
+Warning--empty year in chen2025reinforcement
 Warning--empty year in choudhury2025agentprm
+Warning--empty year in fan2026agentprocessbench
+Warning--empty journal in feng2025gigpo
+Warning--empty year in feng2025gigpo
+Warning--empty year in feng2025gigpo
+Warning--empty journal in guo2025deepseek
+Warning--empty year in guo2025deepseek
+Warning--empty year in guo2025deepseek
+Warning--empty journal in lee2023rlaif
+Warning--empty year in lee2023rlaif
+Warning--empty year in lee2023rlaif
 Warning--empty year in li2026toolprmbench
 Warning--empty journal in lightman2023verify
 Warning--empty year in lightman2023verify
 Warning--empty year in lightman2023verify
-Warning--empty journal in lu2024toolsandbox
-Warning--empty year in lu2024toolsandbox
-Warning--empty year in lu2024toolsandbox
+Warning--empty year in luo2025agentlightning
+Warning--empty journal in ouyang2022training
+Warning--empty year in ouyang2022training
+Warning--empty year in ouyang2022training
 Warning--empty journal in shao2024deepseekmath
 Warning--empty year in shao2024deepseekmath
 Warning--empty year in shao2024deepseekmath
+Warning--empty journal in tan2026hindsightcredit
+Warning--empty year in tan2026hindsightcredit
+Warning--empty year in tan2026hindsightcredit
 Warning--empty year in tao2026trace
 Warning--empty year in typesafe2026docs
 Warning--empty year in typesafe2026jaggedness
-Warning--empty year in wang2022scienceworld
-Warning--empty year in wang2022scienceworld
+Warning--empty year in wang2026igpo
+Warning--empty year in wang2026igpo
 Warning--empty year in xi2025agentprm
-You've used 10 entries,
+Warning--empty year in xie2026tips
+Warning--empty journal in zheng2023judging
+Warning--empty year in zheng2023judging
+Warning--empty year in zheng2023judging
+You've used 19 entries,
             2773 wiz_defined-function locations,
-            665 strings with 7652 characters,
-and the built_in function-call counts, 5238 in all, are:
-= -- 389
-> -- 488
+            698 strings with 9852 characters,
+and the built_in function-call counts, 12001 in all, are:
+= -- 873
+> -- 1268
 < -- 3
-+ -- 167
-- -- 156
-* -- 469
-:= -- 847
-add.period$ -- 30
-call.type$ -- 10
-change.case$ -- 78
-chr.to.int$ -- 9
-cite$ -- 37
-duplicate$ -- 177
-empty$ -- 330
-format.name$ -- 166
-if$ -- 1034
++ -- 428
+- -- 408
+* -- 1161
+:= -- 1957
+add.period$ -- 52
+call.type$ -- 19
+change.case$ -- 186
+chr.to.int$ -- 18
+cite$ -- 76
+duplicate$ -- 347
+empty$ -- 641
+format.name$ -- 427
+if$ -- 2335
 int.to.chr$ -- 2
 int.to.str$ -- 1
-missing$ -- 4
-newline$ -- 58
-num.names$ -- 40
-pop$ -- 219
+missing$ -- 10
+newline$ -- 98
+num.names$ -- 76
+pop$ -- 489
 preamble$ -- 1
-purify$ -- 68
+purify$ -- 167
 quote$ -- 0
-skip$ -- 149
+skip$ -- 317
 stack$ -- 0
-substring$ -- 20
-swap$ -- 10
+substring$ -- 112
+swap$ -- 13
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 110
-warning$ -- 17
-while$ -- 30
+type$ -- 209
+warning$ -- 38
+while$ -- 61
 width$ -- 0
-write$ -- 119
-(There were 17 warnings)
+write$ -- 208
+(There were 38 warnings)
