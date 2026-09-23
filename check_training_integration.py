@@ -194,6 +194,19 @@ def main():
     assert abs(singleton[0, 0].item() - 0.15) < 1e-6
     assert singleton_metrics["singleton_v2_fallback_fraction"] == 1.0
 
+    paired_then_single, _, _ = compute_jev_group_grpo_advantage(
+        token_level_rewards=torch.zeros((3, 1)),
+        response_mask=torch.ones((3, 1)),
+        effect_scores=np.array([0.9, 0.8, 0.5]),
+        confidences=np.array([1.0, 0.25, 1.0]),
+        index=np.array(["group"] * 3),
+        traj_index=np.array(["a", "a", "b"]),
+        turn_index=np.array([0, 1, 0]),
+        verifier_weight=0.0,
+    )
+    # turn 0 remains group-relative; only trajectory a's unmatched turn 1 uses V2.
+    assert np.allclose(paired_then_single[:, 0].numpy(), [0.2, 0.15, -0.2])
+
     outcome_by_traj = np.array([0, 0, 0, 10], dtype=np.float32)
     repeated_outcomes = torch.tensor(np.repeat(outcome_by_traj, 3)).unsqueeze(-1)
     step_baseline, _, _ = compute_jev_step_grpo_advantage(
