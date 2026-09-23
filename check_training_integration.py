@@ -181,6 +181,19 @@ def main():
     )
     assert np.allclose(per_turn[:, 0].numpy(), [0.2, -0.3, -0.2, 0.3])
 
+    singleton, _, singleton_metrics = compute_jev_group_grpo_advantage(
+        token_level_rewards=torch.zeros((1, 1)),
+        response_mask=torch.ones((1, 1)),
+        effect_scores=np.array([0.8]),
+        confidences=np.array([0.25]),
+        index=np.array(["group"]),
+        traj_index=np.array(["last"]),
+        turn_index=np.array([9]),
+        verifier_weight=0.0,
+    )
+    assert abs(singleton[0, 0].item() - 0.15) < 1e-6
+    assert singleton_metrics["singleton_v2_fallback_fraction"] == 1.0
+
     outcome_by_traj = np.array([0, 0, 0, 10], dtype=np.float32)
     repeated_outcomes = torch.tensor(np.repeat(outcome_by_traj, 3)).unsqueeze(-1)
     step_baseline, _, _ = compute_jev_step_grpo_advantage(
