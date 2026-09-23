@@ -28,6 +28,12 @@ fi
 export ALFWORLD_DATA=$root/.cache/alfworld
 export PYTHONPATH=$root/test/jev:$repo${PYTHONPATH:+:$PYTHONPATH}
 export PATH=$root/.conda/envs/verl/bin:$PATH
+python_flags=()
+if [[ ${PYTHON_NO_SITE:-false} == true ]]; then
+    # ponytail: skip unrelated editable .pth hooks during concurrent Ray worker startup.
+    export PYTHONPATH=$root/.conda/envs/verl/lib/python3.10/site-packages:$PYTHONPATH
+    python_flags=(-S)
+fi
 export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
 export VLLM_ATTENTION_BACKEND=FLASHINFER TORCHDYNAMO_DISABLE=1
 # ponytail: a per-run tmpfs path lets two local Ray clusters coexist safely.
@@ -84,7 +90,7 @@ eval_split=${EVAL_SPLIT:-eval_in_distribution}
 [[ $eval_split == eval_in_distribution || $eval_split == eval_out_of_distribution ]] || { echo 'invalid EVAL_SPLIT' >&2; exit 2; }
 
 cd "$repo"
-exec "$root/.conda/envs/verl/bin/python" -m verl.trainer.main_ppo \
+exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.main_ppo \
     algorithm.adv_estimator="$adv_estimator" +algorithm.grpo_cross_steps=false \
     algorithm.jev_step.verifier_weight="$jev_verifier_weight" \
     data.train_files="$root/data/verl-agent/text/train.parquet" \
