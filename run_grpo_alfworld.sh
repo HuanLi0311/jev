@@ -78,6 +78,19 @@ ref_param_offload=${REF_PARAM_OFFLOAD:-true}
 [[ $ref_param_offload == true || $ref_param_offload == false ]] || { echo 'REF_PARAM_OFFLOAD must be true or false' >&2; exit 2; }
 persistent_rollout=${PERSISTENT_ROLLOUT:-false}
 [[ $persistent_rollout == true || $persistent_rollout == false ]] || { echo 'PERSISTENT_ROLLOUT must be true or false' >&2; exit 2; }
+stdlib_shm=${STDLIB_SHM:-false}
+[[ $stdlib_shm == true || $stdlib_shm == false ]] || { echo 'STDLIB_SHM must be true or false' >&2; exit 2; }
+if [[ $stdlib_shm == true ]]; then
+    # ponytail: Ray workers import 41 MB of stdlib from tmpfs, avoiding flaky NFS reads.
+    stdlib_cache=/dev/shm/jev-python-stdlib
+    flock /dev/shm/jev-python-stdlib.lock bash -e -c '
+        if [[ ! -f "$2/.complete" ]]; then
+            rsync -a --exclude=site-packages "$1/" "$2/"
+            touch "$2/.complete"
+        fi
+    ' _ "$root/.conda/envs/verl/lib/python3.10" "$stdlib_cache"
+    export PYTHONPATH=$stdlib_cache:$PYTHONPATH
+fi
 model_shm=${MODEL_SHM:-false}
 [[ $model_shm == true || $model_shm == false ]] || { echo 'MODEL_SHM must be true or false' >&2; exit 2; }
 if [[ $model_shm == true ]]; then
