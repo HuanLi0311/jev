@@ -78,6 +78,20 @@ ref_param_offload=${REF_PARAM_OFFLOAD:-true}
 [[ $ref_param_offload == true || $ref_param_offload == false ]] || { echo 'REF_PARAM_OFFLOAD must be true or false' >&2; exit 2; }
 persistent_rollout=${PERSISTENT_ROLLOUT:-false}
 [[ $persistent_rollout == true || $persistent_rollout == false ]] || { echo 'PERSISTENT_ROLLOUT must be true or false' >&2; exit 2; }
+model_shm=${MODEL_SHM:-false}
+[[ $model_shm == true || $model_shm == false ]] || { echo 'MODEL_SHM must be true or false' >&2; exit 2; }
+if [[ $model_shm == true ]]; then
+    # ponytail: stage the symlinked HF snapshot once so all four workers read local RAM.
+    model_path=$(flock /dev/shm/jev-model-cache.lock "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" - "$model_path" <<'PY'
+import contextlib
+import sys
+from verl.utils.fs import copy_to_shm
+with contextlib.redirect_stdout(sys.stderr):
+    staged = copy_to_shm(sys.argv[1])
+print(staged)
+PY
+)
+fi
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
 ray_num_cpus=${RAY_NUM_CPUS:-16}
 [[ $ray_num_cpus =~ ^[1-9][0-9]*$ ]] || { echo 'RAY_NUM_CPUS must be a positive integer' >&2; exit 2; }
