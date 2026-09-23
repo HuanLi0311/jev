@@ -207,6 +207,20 @@ def main():
     # turn 0 remains group-relative; only trajectory a's unmatched turn 1 uses V2.
     assert np.allclose(paired_then_single[:, 0].numpy(), [0.2, 0.15, -0.2])
 
+    duplicate_rows, _, duplicate_metrics = compute_jev_group_grpo_advantage(
+        token_level_rewards=torch.zeros((3, 1)),
+        response_mask=torch.ones((3, 1)),
+        effect_scores=np.array([0.9, 0.9, 0.5]),
+        confidences=np.ones(3),
+        index=np.array(["group"] * 3),
+        traj_index=np.array(["a", "a", "b"]),
+        turn_index=np.zeros(3, dtype=np.int32),
+        verifier_weight=0.0,
+    )
+    assert np.allclose(duplicate_rows[:, 0].numpy(), [0.2, 0.2, -0.2])
+    assert duplicate_metrics["transitions"] == 2
+    assert duplicate_metrics["duplicate_rows"] == 1
+
     outcome_by_traj = np.array([0, 0, 0, 10], dtype=np.float32)
     repeated_outcomes = torch.tensor(np.repeat(outcome_by_traj, 3)).unsqueeze(-1)
     step_baseline, _, _ = compute_jev_step_grpo_advantage(
