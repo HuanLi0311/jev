@@ -26,6 +26,7 @@ from verl.trainer.ppo.core_algos import (
     compute_jev_group_grpo_advantage,
     compute_jev_step_grpo_advantage,
 )
+from verl.workers.fsdp_workers import ActorRolloutRefWorker
 
 
 class Remote:
@@ -303,8 +304,42 @@ def main():
         assert rollout_rows[0][0]["jev_effect_scores"] == np.float32(0.8)
         assert rollout_rows[0][1]["jev_confidences"] == np.float32(0.6)
         hindsight_log = json.loads(Path(log_path).read_text())
-        assert hindsight_log["trajectory_id"] == "trace"
-        assert hindsight_log["task_uid"] == "game"
+    assert hindsight_log["trajectory_id"] == "trace"
+    assert hindsight_log["task_uid"] == "game"
+
+    calls = []
+    manager = SimpleNamespace(
+        __enter__=lambda: calls.append("wake"),
+        __exit__=lambda *_: calls.append("sleep"),
+    )
+    worker = ActorRolloutRefWorker.__new__(ActorRolloutRefWorker)
+    worker._is_rollout = True
+    worker._rollout_open = False
+    worker.rollout_sharding_manager = manager
+    worker.begin_rollout()
+    worker.end_rollout()
+    assert calls == ["wake", "sleep"] and not worker._rollout_open
+
+    collector.config = SimpleNamespace(actor_rollout_ref=SimpleNamespace(
+        rollout={"persistent_across_turns": True},
+    ))
+    collector._vanilla_multi_turn_loop = lambda *_: "rows"
+    group = SimpleNamespace(
+        begin_rollout=lambda: calls.append("begin"),
+        end_rollout=lambda: calls.append("end"),
+    )
+    assert collector.vanilla_multi_turn_loop(None, group, None) == "rows"
+    assert calls[-2:] == ["begin", "end"]
+    def fail(*_):
+        raise RuntimeError("rollout failed")
+    collector._vanilla_multi_turn_loop = fail
+    try:
+        collector.vanilla_multi_turn_loop(None, group, None)
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("rollout error was swallowed")
+    assert calls[-2:] == ["begin", "end"]
     print("online Jev trajectory and V2/V3/V4 step-level GRPO self-check passed")
 
 
