@@ -5,67 +5,54 @@
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
 
-\bibitem[Choudhury(2025)]{choudhury2025agentprm}
+\bibitem[Choudhury()]{choudhury2025agentprm}
 Choudhury, S.
-\newblock Process reward models for {LLM} agents: Practical framework and
-  directions, 2025.
+\newblock Process reward models for {LLM} agents: Practical framework and directions.
 \newblock URL \url{https://arxiv.org/abs/2502.10325}.
 
-\bibitem[Li et~al.(2026)Li, Yao, Tan, Liu, and Guo]{li2026toolprmbench}
+\bibitem[Li et~al.()Li, Yao, Tan, Liu, and Guo]{li2026toolprmbench}
 Li, D., Yao, Y., Tan, Z., Liu, H., and Guo, R.
-\newblock {ToolPRMBench}: Evaluating and advancing process reward models for
-  tool-using agents, 2026.
+\newblock {ToolPRMBench}: Evaluating and advancing process reward models for tool-using agents.
 \newblock URL \url{https://arxiv.org/abs/2601.12294}.
 
-\bibitem[Lightman et~al.(2023)Lightman, Kosaraju, Burda,
-  et~al.]{lightman2023verify}
-Lightman, H., Kosaraju, V., Burda, Y., et~al.
-\newblock Let's verify step by step, 2023.
-\newblock URL \url{https://arxiv.org/abs/2305.20050}.
+\bibitem[Lightman et~al.()Lightman, Kosaraju, Burda, Edwards, Baker, Lee, Leike, Schulman, Sutskever, and Cobbe]{lightman2023verify}
+Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K.
+\newblock {Let's} verify step by step.
 
-\bibitem[Lu et~al.(2024)Lu, Holleis, Zhang, et~al.]{lu2024toolsandbox}
-Lu, J., Holleis, T., Zhang, Y., et~al.
-\newblock {ToolSandbox}: A stateful, conversational, interactive evaluation
-  benchmark for {LLM} tool use capabilities, 2024.
-\newblock URL \url{https://arxiv.org/abs/2408.04682}.
+\bibitem[Lu et~al.()Lu, Holleis, Zhang, Aumayer, Nan, Bai, Ma, Ma, Li, Yin, et~al.]{lu2024toolsandbox}
+Lu, J., Holleis, T., Zhang, Y., Aumayer, B., Nan, F., Bai, F., Ma, S., Ma, S., Li, M., Yin, G., et~al.
+\newblock {ToolSandbox}: A stateful, conversational, interactive evaluation benchmark for {LLM} tool use capabilities.
 
-\bibitem[Shao et~al.(2024)Shao, Wang, Zhu, et~al.]{shao2024deepseekmath}
-Shao, Z., Wang, P., Zhu, Q., et~al.
-\newblock Deepseekmath: Pushing the limits of mathematical reasoning in open
-  language models, 2024.
-\newblock URL \url{https://arxiv.org/abs/2402.03300}.
+\bibitem[Shao et~al.()Shao, Wang, Zhu, Xu, Song, Bi, Zhang, Zhang, Li, Wu, et~al.]{shao2024deepseekmath}
+Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang, H., Zhang, M., Li, Y., Wu, Y., et~al.
+\newblock Deepseekmath: Pushing the limits of mathematical reasoning in open language models.
 
-\bibitem[Tao et~al.(2026)Tao, Peng, Yao, et~al.]{tao2026trace}
+\bibitem[Tao et~al.()Tao, Peng, Yao, et~al.]{tao2026trace}
 Tao, L., Peng, B., Yao, W., et~al.
-\newblock {TRACE}: Turn-level reward assignment via credit estimation for
-  long-horizon agents, 2026.
+\newblock {TRACE}: Turn-level reward assignment via credit estimation for long-horizon agents.
 \newblock URL \url{https://arxiv.org/abs/2607.13988}.
 
-\bibitem[{TypeSafe AI}(2026{\natexlab{a}})]{typesafe2026docs}
+\bibitem[{TypeSafe AI}({\natexlab{a}})]{typesafe2026docs}
 {TypeSafe AI}.
-\newblock Typesafe {AI}: Introduction and primitives documentation,
-  2026{\natexlab{a}}.
+\newblock Typesafe {AI}: Introduction and primitives documentation, {\natexlab{a}}.
 \newblock URL \url{https://docs.typesafe.ai/introduction}.
 \newblock Accessed 2026-09-19.
 
-\bibitem[{TypeSafe AI}(2026{\natexlab{b}})]{typesafe2026jaggedness}
+\bibitem[{TypeSafe AI}({\natexlab{b}})]{typesafe2026jaggedness}
 {TypeSafe AI}.
-\newblock Jev 1.13 jaggedness, 2026{\natexlab{b}}.
+\newblock Jev 1.13 jaggedness, {\natexlab{b}}.
 \newblock URL \url{https://docs.typesafe.ai/model-jaggedness/jev-1.13}.
 \newblock Accessed 2026-09-19.
 
-\bibitem[Wang et~al.(2022)Wang, Jansen, C{ô}t{\'e}, and
-  Ammanabrolu]{wang2022scienceworld}
-Wang, R., Jansen, P., C{ô}t{\'e}, M.-A., and Ammanabrolu, P.
+\bibitem[Wang et~al.()Wang, Jansen, C{ô}té, and Ammanabrolu]{wang2022scienceworld}
+Wang, R., Jansen, P., C{ô}té, M.-A., and Ammanabrolu, P.
 \newblock {ScienceWorld}: Is your agent smarter than a 5th grader?
-\newblock In \emph{Proceedings of the 2022 Conference on Empirical Methods in
-  Natural Language Processing}, 2022.
+\newblock In \emph{Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing}.
 \newblock URL \url{https://arxiv.org/abs/2203.07540}.
 
-\bibitem[Xi et~al.(2025)Xi, Liao, Li, et~al.]{xi2025agentprm}
+\bibitem[Xi et~al.()Xi, Liao, Li, et~al.]{xi2025agentprm}
 Xi, Z., Liao, C., Li, G., et~al.
-\newblock {AgentPRM}: Process reward models for {LLM} agents via step-wise
-  promise and progress, 2025.
+\newblock {AgentPRM}: Process reward models for {LLM} agents via step-wise promise and progress.
 \newblock URL \url{https://arxiv.org/abs/2511.08325}.
 
 \end{thebibliography}

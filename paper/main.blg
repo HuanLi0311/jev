@@ -3,44 +3,62 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: icml2026.bst
 Database file #1: references.bib
+Warning--empty year in choudhury2025agentprm
+Warning--empty year in li2026toolprmbench
+Warning--empty journal in lightman2023verify
+Warning--empty year in lightman2023verify
+Warning--empty year in lightman2023verify
+Warning--empty journal in lu2024toolsandbox
+Warning--empty year in lu2024toolsandbox
+Warning--empty year in lu2024toolsandbox
+Warning--empty journal in shao2024deepseekmath
+Warning--empty year in shao2024deepseekmath
+Warning--empty year in shao2024deepseekmath
+Warning--empty year in tao2026trace
+Warning--empty year in typesafe2026docs
+Warning--empty year in typesafe2026jaggedness
+Warning--empty year in wang2022scienceworld
+Warning--empty year in wang2022scienceworld
+Warning--empty year in xi2025agentprm
 You've used 10 entries,
             2773 wiz_defined-function locations,
-            639 strings with 6631 characters,
-and the built_in function-call counts, 4225 in all, are:
-= -- 342
-> -- 307
+            665 strings with 7652 characters,
+and the built_in function-call counts, 5238 in all, are:
+= -- 389
+> -- 488
 < -- 3
-+ -- 107
-- -- 96
-* -- 330
-:= -- 669
-add.period$ -- 33
++ -- 167
+- -- 156
+* -- 469
+:= -- 847
+add.period$ -- 30
 call.type$ -- 10
-change.case$ -- 57
+change.case$ -- 78
 chr.to.int$ -- 9
-cite$ -- 20
-duplicate$ -- 165
-empty$ -- 336
-format.name$ -- 106
-if$ -- 872
+cite$ -- 37
+duplicate$ -- 177
+empty$ -- 330
+format.name$ -- 166
+if$ -- 1034
 int.to.chr$ -- 2
 int.to.str$ -- 1
-missing$ -- 1
-newline$ -- 61
+missing$ -- 4
+newline$ -- 58
 num.names$ -- 40
-pop$ -- 147
+pop$ -- 219
 preamble$ -- 1
-purify$ -- 47
+purify$ -- 68
 quote$ -- 0
-skip$ -- 157
+skip$ -- 149
 stack$ -- 0
 substring$ -- 20
-swap$ -- 13
+swap$ -- 10
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
 type$ -- 110
-warning$ -- 0
+warning$ -- 17
 while$ -- 30
 width$ -- 0
-write$ -- 133
+write$ -- 119
+(There were 17 warnings)
