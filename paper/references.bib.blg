@@ -4,3 +4,16 @@
 [173] Biber.pm:4676> INFO - Looking for bibtex file 'references.bib'
 [198] bibtex.pm:1713> INFO - LaTeX decoding ...
 [1135] bibtex.pm:1519> INFO - Found BibTeX data source 'references.bib'
+[21304] UCollate.pm:68> INFO - Overriding locale 'en_US' defaults 'variable = shifted' with 'variable = non-ignorable'
+[21304] UCollate.pm:68> INFO - Overriding locale 'en_US' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[21304] Biber.pm:4307> INFO - Sorting list 'tool/global//global/global/global' of type 'entry' with template 'tool' and locale 'en_US'
+[21304] Biber.pm:4313> INFO - No sort tailoring available for locale 'en_US'
+[21935] bibtex.pm:440> INFO - Writing '/tmp/rldps-arxiv.a9yyL0/references.icml.bib' with encoding 'UTF-8'
+[21965] bibtex.pm:481> INFO - Output to /tmp/rldps-arxiv.a9yyL0/references.icml.bib
+[22069] Biber.pm:132> WARN - Possible typo (case mismatch) between datasource keys: 'langchain' and 'LangChain' in file 'references.bib'
+[22070] Biber.pm:132> WARN - Possible typo (case mismatch) between datasource keys: 'schulman2017ppo' and 'Schulman2017PPO' in file 'references.bib'
+[22070] Biber.pm:132> WARN - inproceedings entry 'pmlr-v162-ethayarajh22a' (references.bib): Invalid format '2022-17' of date field 'date' - ignoring
+[22070] Biber.pm:132> WARN - ISBN '978-1-60558-012-X' in entry 'Li:2008:PUC:1358628.1358946' is invalid - run biber with '--validate_datamodel' for details.
+[22070] Biber.pm:132> WARN - ISBN '978-1-60558-012-X' in entry 'Czerwinski:2008:1358628' is invalid - run biber with '--validate_datamodel' for details.
+[22070] Biber.pm:132> WARN - Date in entry 'Obama08' has DAY or ENDYEAR, cannot be output in legacy format.
+[22070] Biber.pm:134> INFO - WARNINGS: 6
