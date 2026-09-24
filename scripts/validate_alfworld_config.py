@@ -8,6 +8,7 @@ from pathlib import Path
 import pyarrow.parquet as parquet
 import yaml
 
+PROJECT = Path(__file__).resolve().parents[1]
 path, selected_seed = sys.argv[1:]
 config = yaml.safe_load(Path(path).read_text())
 if not isinstance(config, dict):
@@ -91,15 +92,26 @@ if (
 ):
     raise SystemExit("milestones must be sorted, unique, start at 0, and end at updates")
 
-model_path = config.get("model_path")
-if not isinstance(model_path, str) or not model_path.startswith("/"):
-    raise SystemExit("model_path must be absolute")
+def resolved_path(value, name):
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"{name} must be a nonempty path")
+    result = Path(value).expanduser()
+    if not result.is_absolute():
+        result = PROJECT / result
+    return str(result.resolve())
+
+
+model_path = resolved_path(config.get("model_path"), "model_path")
 data = config.get("data", {})
 train_files = data.get("train_files")
 validation_files = data.get("validation_files")
 for name, paths in (("train_files", train_files), ("validation_files", validation_files)):
-    if not isinstance(paths, list) or not paths or any(not Path(item).is_file() for item in paths):
-        raise SystemExit(f"data.{name} must contain existing files")
+    if not isinstance(paths, list) or not paths:
+        raise SystemExit(f"data.{name} must contain paths")
+train_files = [resolved_path(item, "data.train_files") for item in train_files]
+validation_files = [resolved_path(item, "data.validation_files") for item in validation_files]
+if any(not Path(item).is_file() for item in train_files + validation_files):
+    raise SystemExit("data files must exist")
 
 
 def validate_slots(name, paths, expected, split):

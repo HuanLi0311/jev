@@ -4,10 +4,10 @@ set -euo pipefail
 # Edit this one list to select the arms in a suite run.
 algos=(grpo jev gigpo graphgpo)
 
-root=/home/JJ_Group/lih2511
-project=$root/test/jev
+project=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 repo=$project/verl-agent
-python=$root/.conda/envs/verl/bin/python
+python_command=${PYTHON:-python}
+python=$(command -v "$python_command") || { echo "python not found: $python_command" >&2; exit 2; }
 config_path=${CONFIG_PATH:-$project/config/config.yaml}
 [[ -f $config_path ]] || { echo "config missing: $config_path" >&2; exit 2; }
 
@@ -254,7 +254,7 @@ else
 fi
 
 runtime_selection=$(
-    printf 'arm=%s\nseed=%s\ndata_seed=%s\nrollout_seed=%s\n' "$arm" "$seed" "$seed" "$seed"
+    printf 'arm=%s\nseed=%s\ndata_seed=%s\nrollout_seed=%s\nmodel_path=%s\n' "$arm" "$seed" "$seed" "$seed" "$model_path"
     printf 'gpu_count=%s\nactor_micro_batch_size_per_gpu=%s\nlog_prob_micro_batch_size_per_gpu=%s\n' "$gpu_count" "$actor_micro_batch" "$log_prob_micro_batch"
     printf 'optimizer_offload=%s\nreference_parameter_offload=%s\npersistent_rollout=%s\n' "$optimizer_offload" "$ref_param_offload" "$persistent_rollout"
     printf 'tensor_model_parallel_size=%s\nrollout_gpu_memory_utilization=%s\nray_num_cpus=%s\n' "$tensor_parallel_size" "$rollout_gpu_util" "$ray_num_cpus"
@@ -267,13 +267,16 @@ else
     }
 fi
 
-export ALFWORLD_DATA=$root/.cache/alfworld
+if [[ -z ${ALFWORLD_DATA:-} ]]; then
+    export ALFWORLD_DATA=$("$python" -c 'from pathlib import Path; print(Path.home() / ".cache" / "alfworld")')
+fi
 export PYTHONPATH=$project/src:$repo${PYTHONPATH:+:$PYTHONPATH}
-export PATH=$root/.conda/envs/verl/bin:$PATH
+export PATH=$(dirname "$python"):$PATH
 python_flags=()
 if [[ ${PYTHON_NO_SITE:-false} == true ]]; then
     # ponytail: skip unrelated editable .pth hooks during concurrent Ray worker startup.
-    export PYTHONPATH=$root/.conda/envs/verl/lib/python3.10/site-packages:$PYTHONPATH
+    python_purelib=$("$python" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+    export PYTHONPATH=$python_purelib:$PYTHONPATH
     python_flags=(-S)
 fi
 export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
@@ -302,12 +305,13 @@ stdlib_shm=${STDLIB_SHM:-false}
 if [[ $stdlib_shm == true ]]; then
     # ponytail: tmpfs cache assumes an immutable conda env; delete it after Python upgrades.
     stdlib_cache=/dev/shm/jev-python-stdlib
+    stdlib_source=$("$python" -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')
     flock /dev/shm/jev-python-stdlib.lock bash -e -c '
         if [[ ! -f "$2/.complete" ]]; then
             rsync -a --exclude=site-packages "$1/" "$2/"
             touch "$2/.complete"
         fi
-    ' _ "$root/.conda/envs/verl/lib/python3.10" "$stdlib_cache"
+    ' _ "$stdlib_source" "$stdlib_cache"
     export PYTHONPATH=$stdlib_cache:$PYTHONPATH
 fi
 model_shm=${MODEL_SHM:-false}

@@ -75,10 +75,17 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError(f"evaluation.panels must be {EXPECTED_PANELS}")
     if config.get("training", {}).get("invalid_action_shaping") is not False:
         raise ValueError("formal comparison requires invalid_action_shaping=false")
-    model_path = Path(config.get("model_path", ""))
+    def project_path(value: str) -> Path:
+        result = Path(value).expanduser()
+        return result if result.is_absolute() else PROJECT / result
+
+    model_path = project_path(config.get("model_path", ""))
     if not (model_path / "config.json").is_file():
         raise ValueError(f"model snapshot is unavailable: {model_path}")
+    config["model_path"] = str(model_path.resolve())
     data = config.get("data", {})
+    for name in ("train_files", "validation_files"):
+        data[name] = [str(project_path(item).resolve()) for item in data.get(name, [])]
     validation_files = data.get("validation_files", [])
     if not validation_files or any(not Path(path).is_file() for path in validation_files):
         raise ValueError("data.validation_files must contain existing files")
@@ -352,7 +359,9 @@ def run() -> None:
     environment.update(
         {
             "PYTHONPATH": os.pathsep.join(python_paths),
-            "ALFWORLD_DATA": str(PROJECT.parents[1] / ".cache" / "alfworld"),
+            "ALFWORLD_DATA": environment.get(
+                "ALFWORLD_DATA", str(Path.home() / ".cache" / "alfworld")
+            ),
             "HF_HUB_OFFLINE": "1",
             "HF_DATASETS_OFFLINE": "1",
             "VLLM_ATTENTION_BACKEND": "FLASHINFER",
