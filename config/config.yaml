@@ -20,16 +20,9 @@ training:
   paired_seeds: [1, 2, 3]
 
 evaluation:
-  tasks_per_panel: 128
+  tasks: 128
   seed: 1000
   panels:
     valid_seen: eval_in_distribution
     valid_unseen: eval_out_of_distribution
   milestones: [0, 10, 40, 80, 150]
-
-invalid_action_shaping:
-  default: "off"
-  coefficient: 0.1
-  modes:
-    "off": false
-    "on": true
