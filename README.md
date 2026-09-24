@@ -22,7 +22,7 @@ free GPUs 3 and 4 on `air-node-04`. Each vLLM server is capped below half of a
 Every trajectory contains an official verifier reward and step records. The
 same five rollouts for a task form an inference-only RL group.
 
-`compute_advantages.py` produces two deliberately distinct quantities:
+`offline/compute_advantages.py` produces two deliberately distinct quantities:
 
 - `rloo_advantage`: the trajectory return minus the other four trajectory
   returns, broadcast to every decision as outcome-reward RL would do;
@@ -42,12 +42,12 @@ final score.
 The benchmark environments have isolated local environments:
 
 ```bash
-.venv-toolsandbox/bin/python collect_toolsandbox.py \
+.venv-toolsandbox/bin/python offline/collect_toolsandbox.py \
   --base-url http://127.0.0.1:PORT/v1 --model qwen3-4b \
   --output-dir runs/toolsandbox-qwen3-4b-r100-s20260919 \
   --rollouts-per-scenario 5
 
-.venv-scienceworld/bin/python collect_scienceworld.py \
+.venv-scienceworld/bin/python offline/collect_scienceworld.py \
   --base-url http://127.0.0.1:PORT/v1 --model qwen3-4b \
   --output-dir runs/scienceworld-qwen3-4b-r100-v2-s20260919 \
   --rollouts-per-task 5
@@ -62,20 +62,20 @@ but never shown to the policy.
 ## Rewards, advantages and process metrics
 
 ```bash
-python3 compute_advantages.py RUN/trajectories.jsonl \
+python3 offline/compute_advantages.py RUN/trajectories.jsonl \
   --source terminal --output RUN/advantages/terminal.jsonl
 
-python3 compute_advantages.py RUN/trajectories.jsonl \
+python3 offline/compute_advantages.py RUN/trajectories.jsonl \
   --source PROCESS_REWARD_NAME --output RUN/advantages/process.jsonl
 
-python3 process_metrics.py RUN/trajectories.jsonl \
+python3 offline/process_metrics.py RUN/trajectories.jsonl \
   --source terminal --source PROCESS_REWARD_NAME \
   --advantage RUN/advantages/terminal.jsonl \
   --advantage RUN/advantages/process.jsonl \
   --output RUN/metrics-process.json
 ```
 
-`process_metrics.py` reports native-event density, nonzero reward density,
+`offline/process_metrics.py` reports native-event density, nonzero reward density,
 failure-only coverage, temporal variation in reward-to-go, effective credit
 support, reward mass timing, credit on repeated actions, verifier consistency,
 and both trajectory-level and stepwise RLOO behavior. Binary success reward is
@@ -84,11 +84,11 @@ available as `verifier.binary_success_reward`.
 Small runnable checks:
 
 ```bash
-.venv-toolsandbox/bin/python collect_toolsandbox.py --model dummy --self-check
-.venv-scienceworld/bin/python collect_scienceworld.py --model dummy --self-check
-python3 compute_advantages.py --self-check
-python3 process_metrics.py --self-check
-python3 evaluate.py --self-check
+.venv-toolsandbox/bin/python offline/collect_toolsandbox.py --model dummy --self-check
+.venv-scienceworld/bin/python offline/collect_scienceworld.py --model dummy --self-check
+python3 offline/compute_advantages.py --self-check
+python3 offline/process_metrics.py --self-check
+python3 offline/evaluate.py --self-check
 ```
 
 The pre-registered comparison and interpretation rules are in
@@ -102,15 +102,15 @@ has been checked with `jev-1.13.0`; completed scored subsets are recorded in
 or output file. The scorer prompts for it when `TYPESAFE_API_KEY` is absent:
 
 ```bash
-python3 score_jev.py COMPLETED_TRAJECTORIES.jsonl --output RUN/jev-process.jsonl
+python3 src/score_jev.py COMPLETED_TRAJECTORIES.jsonl --output RUN/jev-process.jsonl
 ```
 
-`score_jev.py` is the single active protocol. It runs after episode completion
+`src/score_jev.py` is the single active protocol. It runs after episode completion
 and sends the task, explicit success criteria, complete public trajectory, and
 verified terminal `{reward, success, reward_definition}`. One request returns a
 continuous effect score `q` and confidence `c` for every transition. The
 whitelist excludes oracle state, gold paths, stored process labels, and hidden
-verifier internals. Run `python3 score_jev.py --self-check` before changing the
+verifier internals. Run `python3 src/score_jev.py --self-check` before changing the
 protocol. Frozen prefix-only annotations and their evaluations remain under
 `runs/` as historical experiments; their former scorer is no longer an active
 training path.
@@ -125,7 +125,8 @@ ToolSandbox and ScienceWorld store baseline outcome reward in `verifier`;
 ALFWorld stores it in `terminal.rlvr_reward`. The separate `jev-process.jsonl`
 from GRPO training is not part of this frozen offline comparison.
 
-The ICML 2026 paper draft and official template are in [`paper/`](paper/).
+The ICML 2026 paper draft and official template are in
+[`assets/paper/`](assets/paper/).
 Offline annotation can establish only process-credit measurement quality;
 policy improvement requires the later matched GRPO training experiment.
 

@@ -169,7 +169,7 @@ used for evaluation and must never be reported as an empirical model result.
 
 ## Data contract
 
-`collect.py` writes one trajectory per line. Each step retains:
+`offline/collect.py` writes one trajectory per line. Each step retains:
 
 - pre-action observation and admissible actions;
 - raw Qwen generation, extracted reasoning, parsed action, and parsing method;
