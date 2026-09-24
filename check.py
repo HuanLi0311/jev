@@ -21,6 +21,7 @@ from agent_system.environments.env_package.alfworld.projection import alfworld_p
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
 from score_jev import public_completed_trajectory, questions_for_steps
 from verl.trainer.ppo.core_algos import compute_jev_step_grpo_advantage
+from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 from verl.workers.fsdp_workers import ActorRolloutRefWorker
 
 
@@ -262,6 +263,29 @@ def check_persistent_rollout():
     assert calls[-2:] == ["begin", "end"]
 
 
+def check_validation_panels():
+    closed = []
+
+    class Panel:
+        def __init__(self, name):
+            self.name = name
+
+        def close(self):
+            closed.append(self.name)
+
+    trainer = RayPPOTrainer.__new__(RayPPOTrainer)
+    trainer.val_envs = {
+        "valid_seen": lambda: Panel("valid_seen"),
+        "valid_unseen": lambda: Panel("valid_unseen"),
+    }
+    trainer._validate_one = lambda panel, name: {f"val/{name}/score": panel.name}
+    assert trainer._validate() == {
+        "val/valid_seen/score": "valid_seen",
+        "val/valid_unseen/score": "valid_unseen",
+    }
+    assert closed == ["valid_seen", "valid_unseen"]
+
+
 def main():
     check_formal_config()
     check_public_input()
@@ -269,6 +293,7 @@ def main():
     check_advantage()
     check_post_episode_annotation()
     check_persistent_rollout()
+    check_validation_panels()
     print("Jev process-reward integration check passed")
 
 
