@@ -176,6 +176,14 @@ PyTorch reserved memory rose from 25.4 to 27.9 GB per A100. This is 54% more
 processed tokens per training second; both runs completed without OOM or
 DataLoader shutdown errors.
 
+After consolidating the code into the single Jev process-reward path, the same
+four-A100 batch-8 check processed the identical 125,828 tokens in 294 seconds
+(actor 155 seconds, generation 64 seconds) at 107.0 tokens/s, with the same
+27.9 GB peak reserved memory. This is within 6% of the earlier 276-second,
+113.9-token/s measurement and confirms that the cleanup preserved the reported
+throughput regime. The artifact is
+`runs/grpo-alfworld-perf-clean-main-b8-20260924a/`.
+
 Sampled GPU utilization fell from 77% to 68% in that comparison even as
 throughput rose, so utilization alone is not a throughput measure. Launch to
 first training step took about 14–15 minutes with one validation actor, zero

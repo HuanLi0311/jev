@@ -468,3 +468,14 @@ group-relative ablation reaches 2/64 with mean score 0.106 and is not retained
 as an active method. The authoritative current artifact is
 `grpo-alfworld-formal10_v4step_only4_vb64_q25_15b_s0_t30_u10_20260924/`;
 its historical directory name predates the code cleanup.
+
+The post-cleanup four-A100 efficiency check uses batch 8, actor/log-prob
+microbatches 4/8, resident optimizer and reference parameters, persistent
+rollout, ten ALFWorld turns, and one update. It processes 125,828 tokens in
+294.019 seconds (generation 63.540 seconds, actor update 155.441 seconds), or
+106.990 tokens/s, with 27.854 GB peak reserved memory per GPU. The matched
+pre-cleanup fast check took 276.103 seconds at 113.932 tokens/s with the same
+token count and peak memory. The 6% difference is within shared-node run
+variation and does not indicate loss of the reported efficiency regime. The
+post-cleanup run also confirms 320 transition advantages, 99.7% nonzero
+coverage, and a 100% nonconstant-trajectory fraction in an all-failure batch.
