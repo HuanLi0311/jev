@@ -61,6 +61,8 @@ if [[ $arm == jev ]]; then
 fi
 updates=${TRAIN_UPDATES:-1}
 max_steps=${MAX_STEPS:-10}
+train_batch_size=${TRAIN_BATCH_SIZE:-4}
+[[ $train_batch_size =~ ^[1-9][0-9]*$ ]] || { echo 'TRAIN_BATCH_SIZE must be a positive integer' >&2; exit 2; }
 val_batch_size=${VAL_BATCH_SIZE:-64}
 [[ $val_batch_size =~ ^[1-9][0-9]*$ ]] || { echo 'VAL_BATCH_SIZE must be a positive integer' >&2; exit 2; }
 test_freq=${TEST_FREQ:-1}
@@ -139,7 +141,7 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     algorithm.jev_step.verifier_weight="$jev_verifier_weight" \
     data.train_files="$root/data/verl-agent/text/train.parquet" \
     data.val_files="$root/data/verl-agent/text/test.parquet" \
-    data.train_batch_size=4 data.val_batch_size="$val_batch_size" data.shuffle=false \
+    data.train_batch_size="$train_batch_size" data.val_batch_size="$val_batch_size" data.shuffle=false \
     data.max_prompt_length=2048 data.max_response_length=256 \
     data.filter_overlong_prompts=true data.truncation=left data.return_raw_chat=true \
     +data.apply_chat_template_kwargs.enable_thinking=false \
