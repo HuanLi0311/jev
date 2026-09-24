@@ -102,20 +102,18 @@ has been checked with `jev-1.13.0`; completed scored subsets are recorded in
 or output file. The scorer prompts for it when `TYPESAFE_API_KEY` is absent:
 
 ```bash
-python3 score_jev_v1.py RUN/trajectories.jsonl --output RUN/jev-transition-v1.jsonl
-python3 evaluate_jev.py RUN/trajectories.jsonl RUN/jev-transition-v1.jsonl
+python3 score_jev.py COMPLETED_TRAJECTORIES.jsonl --output RUN/jev-process.jsonl
 ```
 
-`score_jev_v1.py` sends only task text, public prefix (up to three previous
-transitions), the current action, and the observed result. Its self-check
-asserts that `verifier`, `rewards`, `oracle`, `gold_action_sequence`, hidden
-tool details, and future steps never enter the request. The evaluator refuses
-incomplete annotations by default and scores nonterminal steps within groups
-where all five rollouts failed. Run `python3 score_jev_v1.py --self-check` and
-`python3 evaluate_jev.py --self-check` before changing either protocol.
-`evaluate_jev.py --exclude-repeated-state-actions` is an exploratory control
-that drops later occurrences of an exact `(observation_before, action)` pair;
-it does not replace the preregistered primary slice.
+`score_jev.py` is the single active protocol. It runs after episode completion
+and sends the task, explicit success criteria, complete public trajectory, and
+verified terminal `{reward, success, reward_definition}`. One request returns a
+continuous effect score `q` and confidence `c` for every transition. The
+whitelist excludes oracle state, gold paths, stored process labels, and hidden
+verifier internals. Run `python3 score_jev.py --self-check` before changing the
+protocol. Frozen prefix-only annotations and their evaluations remain under
+`runs/` as historical experiments; their former scorer is no longer an active
+training path.
 
 Offline judge comparisons reuse these previously sampled trajectories; they
 never call the policy or environment to generate another rollout. Join Jev and
@@ -124,25 +122,32 @@ trajectory-level baseline reward by `trajectory_id`. Verify each run's
 `SOURCE_SHA256SUMS` before analysis. Keep baseline labels in
 the source records for evaluation, but never include them in judge requests.
 ToolSandbox and ScienceWorld store baseline outcome reward in `verifier`;
-ALFWorld stores it in `terminal.rlvr_reward`. The separate `jev-online.jsonl`
+ALFWorld stores it in `terminal.rlvr_reward`. The separate `jev-process.jsonl`
 from GRPO training is not part of this frozen offline comparison.
 
-The ICML 2026 paper draft and official template are in `../../dllm/assets/icml_1/`.
+The ICML 2026 paper draft and official template are in [`paper/`](paper/).
 Offline annotation can establish only process-credit measurement quality;
 policy improvement requires the later matched GRPO training experiment.
 
-## V4 online efficiency checks
+## Online training and efficiency checks
 
-Use `run_grpo_alfworld.sh` for one-update timing checks before a full run. Set
-`TRAIN_UPDATES=1 MAX_STEPS=10 VAL_BEFORE_TRAIN=false TEST_FREQ=-1 SAVE_FREQ=-1`;
-the launcher then creates only one unused validation actor. Compare
-`timing_s/gen`, `timing_s/update_actor`, `timing_s/step`, rollout tokens, and GPU
-memory/utilization after the first training step. Run artifacts stay under
-`runs/grpo-alfworld-RUN_TAG/`. For V4, set `ADV_ESTIMATOR=jev_step_grpo`,
-`JEV_REWARD_MODE=hindsight_step_only_advantage`, `MODEL_PATH` to the local
-Qwen2.5-1.5B snapshot, and `CUDA_VISIBLE_DEVICES` to the selected four GPUs.
+The copied and locally adapted training stack is in [`verl-agent/`](verl-agent/);
+the source tree under `test/dllm/iclr_4/` is not modified. The launcher selects
+standard sparse GRPO for `baseline` and the sole Jev process-reward estimator
+for `jev`; there are no version or reward-mode switches:
 
-For the four-GPU V4 Qwen2.5-1.5B pilot, set `REF_PARAM_OFFLOAD=false`,
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 MODEL_PATH=/path/to/Qwen2.5-1.5B \
+  ./run_grpo_alfworld.sh jev RUN_TAG
+```
+
+For a one-update timing check, additionally set
+`TRAIN_UPDATES=1 MAX_STEPS=10 VAL_BEFORE_TRAIN=false TEST_FREQ=-1 SAVE_FREQ=-1`.
+Compare `timing_s/gen`, `timing_s/update_actor`, `timing_s/step`, processed
+tokens, and peak GPU memory. Artifacts stay under
+`runs/grpo-alfworld-RUN_TAG/`.
+
+For the four-GPU Qwen2.5-1.5B pilot, set `REF_PARAM_OFFLOAD=false`,
 `OPTIMIZER_OFFLOAD=false`, and `PERSISTENT_ROLLOUT=true`. The persistent rollout
 keeps vLLM weights resident across ALFWorld turns and releases them before the
 actor update. The fastest measured short-run setting also uses

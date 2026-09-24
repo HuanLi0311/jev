@@ -72,8 +72,10 @@ The key delayed-credit endpoint is the same AUROC computed **only among terminal
 failures**. RLVR assigns every one of those steps the same zero, while a useful
 process judge should still distinguish partial progress from the first damaging
 or looping action. This failure-only slice is declared before Jev scores are seen.
-For online/localization claims, a judge sees only the prefix through the scored
-transition—never later steps, terminal success, or any oracle field.
+For causal-prefix localization claims, a judge sees only the prefix through the
+scored transition—never later steps, terminal success, or any oracle field.
+The separate post-episode training protocol is explicitly outcome-conditioned
+and makes no causal-prefix claim.
 
 The likely Jev advantage should be tested on a Pareto plot, not selected after seeing results:
 
@@ -177,8 +179,10 @@ used for evaluation and must never be reported as an empirical model result.
 
 Judge annotations are separate JSONL records keyed by `(trajectory_id,
 step_index)`, with the filtered `request.state`, raw `response`, rubric version,
-numeric judge reward, and latency. Baseline verifier labels remain only in the
-frozen source files and are joined for evaluation, never sent to a judge.
+numeric judge reward, and latency. In the frozen prefix-only comparison,
+baseline verifier labels remain only in source files and are joined for
+evaluation. The post-episode training method instead exposes the verified final
+outcome intentionally, while still excluding oracle and hidden verifier state.
 
 `pairwise_cases.jsonl` is a labeled evaluation artifact. A judge adapter must
 send only `state` and `options`; it must withhold `correct_option` and all oracle
@@ -187,79 +191,45 @@ bias.
 
 ## Matched online GRPO pilot
 
-The primary training comparison starts from the same cached
-Qwen2.5-1.5B-Instruct checkpoint and seed 0. It uses four training prompts,
-four rollouts per prompt, a 30-action horizon, ten updates, and verifier-only
-`valid_seen` evaluation before training and after updates 5 and 10. The sparse
-RLVR baseline uses standard trajectory-level GRPO on
-`R_i = 10 * success_i`, broadcasting one group-standardized `A_out[i]` to every
-action in trajectory `i`. The revised Jev rubric explicitly receives the
-static success criteria and returns a continuous effect score `q[i,t]` and
-confidence `c[i,t]`, both in `[0, 1]`. It assigns
+The training comparison starts from the same cached Qwen2.5-1.5B-Instruct
+checkpoint and seed 0. It uses four prompts, four rollouts per prompt, a
+30-action horizon, ten updates, and verifier-only `valid_seen` evaluation at
+updates 0, 5, and 10. Sparse RLVR uses standard trajectory-level GRPO on
+`R_i = 10 * success_i` and broadcasts one group-standardized `A_out[i]` to all
+actions in trajectory `i`.
 
-`A_jev[i,t] = c[i,t] * (2 * q[i,t] - 1)`,
+The current Jev method labels only after an episode terminates. Jev receives
+the static success criteria, complete public action--observation trace, and
+verified terminal `{reward, success, reward_definition}`. It returns continuous
+effect `q[i,t]` and confidence `c[i,t]` in `[0, 1]` for every transition. Oracle
+state, gold paths, stored process labels, and hidden verifier internals remain
+excluded. Its sole training advantage is
 
-`A[i,t] = A_jev[i,t] + 0.1 * A_out[i]`.
+`A[i,t] = c[i,t] * (2 * q[i,t] - 1)`.
 
-The Jev term is not group-standardized or propagated across future turns,
-because its sign and confidence magnitude directly determine the update for
-turn `t`. Only that turn's action tokens receive `A[i,t]`; standard PPO then
-applies its clipped importance ratio. The shared parser, optimizer,
-sampling budget, model, and held-out verifier are unchanged. Jev reads only
-the success criteria, current prefix, and observed transition; it never reads
-the current trajectory's verifier result, future steps, or frozen annotations. The earlier
-six-game `valid_unseen` slice is development-only. This remains a one-seed
-pilot until replicated.
+There is no group standardization and no separately added outcome advantage:
+the verified outcome already conditions Jev's retrospective judgment. Only the
+response tokens emitted at turn `t` receive `A[i,t]`; clipped PPO supplies the
+usual importance ratio. Future observations and the terminal outcome are valid
+post-episode labeling context, but are never policy inputs at deployment.
 
-A completed matched run now evaluates the revised confidence-preserving
-estimator. Both arms start at 0/64 held-out successes, and their first 480
-sampled transitions are identical after removing run identifiers. All 16
-first-batch trajectories fail. Standard GRPO therefore has zero advantage and
-policy-gradient loss 0.000, whereas Jev gives 480/480 transitions nonzero
-advantage, every trajectory has varying within-trajectory advantage, and the
-policy-gradient loss is 0.571. At update 5, held-out success is 8/64 for Jev
-and 0/64 for sparse GRPO; at update 10 it is 19/64 versus 1/64, with mean
-verifier scores 1.423 versus 0.037. The full 4,327-call Jev log contains no API
-errors or forbidden request fields. This passes the pilot's three go/no-go
-gates, but it remains one training seed and one 64-task evaluation; formal
-sample-efficiency or benchmark-superiority claims require multi-seed
-replication. Exact artifacts and the leakage audit are recorded in
+The current arm starts from 0/64. Its first batch has 16/16 failures but still
+assigns nonzero, nonconstant turn-level advantages. At update 5 it reaches
+16/64 held-out success with mean verifier score 1.067; at update 10 it reaches
+21/64 with mean score 1.535. Across ten updates it labels 4,363 transitions,
+99.51% receive nonzero advantage, and every trajectory has nonconstant
+within-trajectory credit. Sparse GRPO finishes at 1/64 and mean score 0.037.
+This passes the three pilot gates, but remains a one-seed result.
+
+Historical ablations are retained as data, not executable modes. Prefix-only
+Jev (no future or outcome context) reaches 19/64. Outcome-conditioned Jev with
+an additional `0.1 * A_out` anchor reaches 22/64 and mean score 1.250; its
+slightly higher success but lower continuous score does not establish uniform
+dominance over the current 21/64, 1.535 Jev-only estimator. Same-turn
+group-relative centering reaches only 2/64. The earliest trajectory-aggregate
+variant reaches 2/64 at update 5 but does not provide within-trajectory credit.
+Exact artifacts are indexed in
 [`runs/PROCESS_RESULTS.md`](runs/PROCESS_RESULTS.md).
-
-The earlier one-update reward-to-go smoke test remains an ablation. It also
-produced dense turn-level advantages in an all-failure batch, but same-turn
-standardization discarded the confidence scale. That run was stopped after
-seven completed updates and is not used for the primary result.
-
-### Outcome-conditioned hindsight follow-up
-
-A matched single-arm follow-up keeps the prefix-only run frozen and changes
-only when and with what context Jev labels transitions. After each episode
-terminates, Jev receives the full public trajectory plus the verified terminal
-reward and success bit, and returns one continuous effect score and confidence
-per transition in a single request. It uses the same direct advantage and PPO
-objective above. Oracle state, gold paths, stored process rewards, and hidden
-verifier internals remain excluded. This is a post-episode hindsight annotator,
-not an online causal PRM: future steps and terminal outcome are intentionally
-visible while constructing training labels, but neither Jev nor those fields
-are inputs to the deployed policy.
-
-The hindsight arm starts from the same 0/64 checkpoint. At update 5 it reaches
-16/64 held-out successes and mean verifier score 1.214, compared with 8/64 and
-0.427 for the frozen prefix-only arm. At update 10 it reaches 22/64 and 1.250,
-compared with 19/64 and 1.423. Across 4,350 labeled transitions, 99.6% receive
-nonzero advantage and every update has nonconstant within-trajectory credit.
-Thus strict success favors hindsight at both checkpoints, especially early,
-but the final continuous score does not. This one-seed mixed endpoint supports
-multi-seed replication rather than a general superiority claim. Exact artifacts
-are indexed in [`runs/PROCESS_RESULTS.md`](runs/PROCESS_RESULTS.md).
-
-The previous online run is retained only as a trajectory-aggregate ablation.
-It used `10 * success + 0.1 * mean_t(j_t)`, standardized the four episode
-returns, and broadcast one scalar advantage to all turns. It produced optimizer
-signal when all rollouts failed and had 2/64 held-out successes at update 5
-versus 1/64 for sparse GRPO, but it did not implement within-trajectory credit;
-the one-success difference is inconclusive and is not the primary method.
 
 ## Sources and design rationale
 

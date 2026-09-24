@@ -182,19 +182,15 @@ def compute_jev_step_grpo_advantage(
     index: np.ndarray,
     traj_index: np.ndarray,
     turn_index: np.ndarray,
-    verifier_weight: float = 0.1,
     epsilon: float = 1e-6,
 ):
     """Use confidence-weighted continuous Jev scores as per-turn advantages.
 
-    Jev is the primary signal: A_jev = confidence * (2 * score - 1).  A small
-    standard trajectory-level GRPO advantage can optionally anchor it to the
-    environment verifier.  Jev advantages are deliberately not standardized,
-    because their absolute magnitude carries confidence.
+    A_jev = confidence * (2 * score - 1). The verified outcome conditions
+    Jev's retrospective score but is not added again as a separate advantage.
+    Values are deliberately not standardized because magnitude carries
+    confidence.
     """
-    if verifier_weight < 0:
-        raise ValueError("verifier_weight must be nonnegative")
-
     outcomes = token_level_rewards.sum(dim=-1).detach().cpu().numpy()
     scores = np.asarray([
         float(np.asarray(value).reshape(-1)[0]) for value in effect_scores
@@ -215,16 +211,6 @@ def compute_jev_step_grpo_advantage(
     jev_tensor = torch.as_tensor(
         jev_values, dtype=torch.float32, device=response_mask.device
     ).unsqueeze(-1) * response_mask
-    outcome_advantages, _ = compute_grpo_outcome_advantage(
-        token_level_rewards=token_level_rewards,
-        response_mask=response_mask,
-        index=index,
-        traj_index=traj_index,
-        epsilon=epsilon,
-        norm_adv_by_std_in_grpo=True,
-        compute_mean_std_cross_steps=False,
-    )
-    result = jev_tensor + verifier_weight * outcome_advantages
 
     records = {}
     for batch_idx, (task, traj, turn) in enumerate(
@@ -289,126 +275,13 @@ def compute_jev_step_grpo_advantage(
             if outcome_equivalent_keys else 0.0
         ),
         "mean_abs_advantage": float(
-            result.abs().sum() / response_mask.sum().clamp_min(1)
+            jev_tensor.abs().sum() / response_mask.sum().clamp_min(1)
         ),
         "mean_effect_score": float(scores.mean()) if len(scores) else 0.0,
         "mean_confidence": float(confidence_values.mean()) if len(confidence_values) else 0.0,
         "mean_abs_jev_advantage": float(np.abs(jev_values).mean()) if len(jev_values) else 0.0,
     }
-    return result, result, stats
-
-
-def compute_jev_group_grpo_advantage(
-    token_level_rewards: torch.Tensor,
-    response_mask: torch.Tensor,
-    effect_scores: np.ndarray,
-    confidences: np.ndarray,
-    index: np.ndarray,
-    traj_index: np.ndarray,
-    turn_index: np.ndarray,
-    verifier_weight: float = 0.1,
-    epsilon: float = 1e-6,
-):
-    """Center Jev q within same-prompt, same-turn rollout groups.
-
-    With two or more surviving rollouts,
-    A_jev(i,t) = c(i,t) * (q(i,t) - sum_j c(j,t)q(j,t)/sum_j c(j,t)).
-    A singleton late turn falls back to V2: c(i,t) * (2*q(i,t) - 1).
-    """
-    if verifier_weight < 0:
-        raise ValueError("verifier_weight must be nonnegative")
-
-    outcomes = token_level_rewards.sum(dim=-1).detach().cpu().numpy()
-    scores = np.asarray([
-        float(np.asarray(value).reshape(-1)[0]) for value in effect_scores
-    ], dtype=np.float64)
-    confidence_values = np.asarray([
-        float(np.asarray(value).reshape(-1)[0]) for value in confidences
-    ], dtype=np.float64)
-    if len(scores) != len(outcomes) or len(confidence_values) != len(outcomes):
-        raise ValueError("Jev scores and confidences must align with the batch")
-    if not np.isfinite(scores).all() or np.any((scores < 0) | (scores > 1)):
-        raise ValueError("Jev effect scores must be finite and in [0, 1]")
-    if not np.isfinite(confidence_values).all() or np.any(
-        (confidence_values < 0) | (confidence_values > 1)
-    ):
-        raise ValueError("Jev confidences must be finite and in [0, 1]")
-
-    groups = defaultdict(list)
-    samples = {}
-    for batch_idx, (task, traj, turn) in enumerate(
-        zip(index, traj_index, turn_index, strict=True)
-    ):
-        sample = (str(task), str(traj), int(turn))
-        if sample in samples:
-            previous = samples[sample]
-            if (
-                abs(previous["score"] - scores[batch_idx]) > epsilon
-                or abs(previous["confidence"] - confidence_values[batch_idx]) > epsilon
-                or abs(previous["outcome"] - outcomes[batch_idx]) > epsilon
-            ):
-                raise ValueError("duplicate trajectory turn has inconsistent Jev data")
-            previous["batch_indices"].append(batch_idx)
-            continue
-        samples[sample] = {
-            "score": scores[batch_idx],
-            "confidence": confidence_values[batch_idx],
-            "outcome": outcomes[batch_idx],
-            "batch_indices": [batch_idx],
-        }
-        groups[(sample[0], sample[2])].append(sample)
-
-    jev_values = np.zeros(len(scores), dtype=np.float64)
-    for members in groups.values():
-        weights = np.asarray([samples[member]["confidence"] for member in members])
-        member_scores = np.asarray([samples[member]["score"] for member in members])
-        if len(members) == 1:
-            member = members[0]
-            value = weights[0] * (2 * member_scores[0] - 1)
-            jev_values[samples[member]["batch_indices"]] = value
-            continue
-        weight_sum = weights.sum()
-        baseline = (
-            np.dot(weights, member_scores) / weight_sum
-            if weight_sum > epsilon else member_scores.mean()
-        )
-        values = weights * (member_scores - baseline)
-        for member, value in zip(members, values, strict=True):
-            jev_values[samples[member]["batch_indices"]] = value
-
-    jev_tensor = torch.as_tensor(
-        jev_values, dtype=torch.float32, device=response_mask.device
-    ).unsqueeze(-1) * response_mask
-    outcome_advantages, _ = compute_grpo_outcome_advantage(
-        token_level_rewards=token_level_rewards,
-        response_mask=response_mask,
-        index=index,
-        traj_index=traj_index,
-        epsilon=epsilon,
-        norm_adv_by_std_in_grpo=True,
-        compute_mean_std_cross_steps=False,
-    )
-    result = jev_tensor + verifier_weight * outcome_advantages
-    peer_groups = [members for members in groups.values() if len(members) > 1]
-    unique_values = np.asarray([
-        jev_values[record["batch_indices"][0]] for record in samples.values()
-    ])
-    unique_scores = np.asarray([record["score"] for record in samples.values()])
-    unique_confidences = np.asarray([record["confidence"] for record in samples.values()])
-    stats = {
-        "transitions": float(len(samples)),
-        "batch_rows": float(len(scores)),
-        "duplicate_rows": float(len(scores) - len(samples)),
-        "turn_groups": float(len(groups)),
-        "peer_group_fraction": len(peer_groups) / max(len(groups), 1),
-        "singleton_v2_fallback_fraction": 1 - len(peer_groups) / max(len(groups), 1),
-        "nonzero_transition_fraction": float(np.mean(np.abs(unique_values) > epsilon)) if len(samples) else 0.0,
-        "mean_abs_advantage": float(result.abs().sum() / response_mask.sum().clamp_min(1)),
-        "mean_effect_score": float(unique_scores.mean()) if len(samples) else 0.0,
-        "mean_confidence": float(unique_confidences.mean()) if len(samples) else 0.0,
-        "mean_abs_jev_advantage": float(np.abs(unique_values).mean()) if len(samples) else 0.0,
-    }
-    return result, result, stats
+    return jev_tensor, jev_tensor, stats
 
 
 def compute_grpo_passk_outcome_advantage(

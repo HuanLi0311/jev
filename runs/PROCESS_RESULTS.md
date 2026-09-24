@@ -446,3 +446,25 @@ the final validation metrics, and all 12 expected rank-sharded model, optimizer,
 and extra-state files for checkpoint 10. These warnings do not remove any
 reported result, but the run should not be described as having a clean process
 exit.
+
+## Current outcome-conditioned Jev-only estimator
+
+The maintained method uses the same completed public trajectory and explicit
+verified outcome as the hindsight follow-up, but removes the separately added
+`0.1 * A_out` anchor. Its training signal is exactly
+`A[i,t] = c[i,t] * (2*q[i,t] - 1)` on the response tokens of turn `t`.
+
+The run starts at 0/64 held-out success. It reaches 16/64 with mean verifier
+score 1.067 at update 5 and 21/64 with mean score 1.535 at update 10. Training
+batch successes over updates 1--10 are `0, 0, 4, 1, 6, 1, 2, 0, 4, 9` out of
+16. Across 4,363 labeled transitions, 99.51% receive nonzero advantage and the
+nonconstant-trajectory fraction is 100%; mean Jev confidence is approximately
+0.705. The corresponding sparse GRPO endpoint remains 1/64 and 0.037.
+
+The historical outcome-anchored run is 22/64 with mean score 1.250, so the
+one-success difference does not identify a reliable winner, while the current
+Jev-only run is better on continuous verifier score. The same-turn
+group-relative ablation reaches 2/64 with mean score 0.106 and is not retained
+as an active method. The authoritative current artifact is
+`grpo-alfworld-formal10_v4step_only4_vb64_q25_15b_s0_t30_u10_20260924/`;
+its historical directory name predates the code cleanup.

@@ -97,7 +97,6 @@ class AdvantageEstimator(str, Enum):
     GiGPO = 'gigpo'
     OURS = "ours"
     JEV_STEP_GRPO = "jev_step_grpo"
-    JEV_GROUP_GRPO = "jev_group_grpo"
 
 
 @dataclass
@@ -393,21 +392,6 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
             index=data.non_tensor_batch["uid"],
             traj_index=data.non_tensor_batch["traj_uid"],
             turn_index=data.non_tensor_batch["turn_index"],
-            verifier_weight=kwargs.get("jev_step_verifier_weight", 0.1),
-        )
-        data.batch["advantages"] = advantages
-        data.batch["returns"] = returns
-        data.meta_info["jev_step_metrics"] = jev_step_metrics
-    elif adv_estimator == AdvantageEstimator.JEV_GROUP_GRPO:
-        advantages, returns, jev_step_metrics = core_algos.compute_jev_group_grpo_advantage(
-            token_level_rewards=data.batch["token_level_rewards"],
-            response_mask=data.batch["response_mask"],
-            effect_scores=data.non_tensor_batch["jev_effect_scores"],
-            confidences=data.non_tensor_batch["jev_confidences"],
-            index=data.non_tensor_batch["uid"],
-            traj_index=data.non_tensor_batch["traj_uid"],
-            turn_index=data.non_tensor_batch["turn_index"],
-            verifier_weight=kwargs.get("jev_step_verifier_weight", 0.1),
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
@@ -509,7 +493,6 @@ class RayPPOTrainer:
             AdvantageEstimator.GiGPO,
             AdvantageEstimator.OURS,
             AdvantageEstimator.JEV_STEP_GRPO,
-            AdvantageEstimator.JEV_GROUP_GRPO,
         ]:
             self.use_critic = False
         else:
@@ -1322,7 +1305,6 @@ class RayPPOTrainer:
                             ours_process_weight=self.config.algorithm.ours.process_weight,
                             ours_outcome_weight=self.config.algorithm.ours.outcome_weight,
                             ours_advantage_clip=self.config.algorithm.ours.advantage_clip,
-                            jev_step_verifier_weight=self.config.algorithm.jev_step.verifier_weight,
                         )
                         if "ours_metrics" in batch.meta_info:
                             metrics.update({

@@ -12,7 +12,7 @@ gpu_count=${#cuda_devices[@]}
 [[ $(printf '%s\n' "${cuda_devices[@]}" | sort -u | wc -l) -eq $gpu_count ]] || { echo 'GPU indices must be unique' >&2; exit 2; }
 
 root=/home/JJ_Group/lih2511
-repo=$root/test/dllm/iclr_4/verl-agent
+repo=$root/test/jev/verl-agent
 model_path=${MODEL_PATH:-$root/.cache/huggingface/hub/Qwen3-1.7B}
 [[ -f $model_path/config.json ]] || { echo "model config missing: $model_path" >&2; exit 2; }
 run_dir=$root/test/jev/runs/grpo-alfworld-$run_tag
@@ -54,10 +54,12 @@ else
     exec > >(tee -a "$run_dir/train.log") 2>&1
 fi
 
-jev_weight=0
 if [[ $arm == jev ]]; then
-    # ponytail: fixed pilot coefficient; tune only on development tasks before held-out claims.
-    jev_weight=0.1
+    adv_estimator=jev_step_grpo
+    jev_process_reward=true
+else
+    adv_estimator=grpo
+    jev_process_reward=false
 fi
 updates=${TRAIN_UPDATES:-1}
 max_steps=${MAX_STEPS:-10}
@@ -110,20 +112,6 @@ fi
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
 ray_num_cpus=${RAY_NUM_CPUS:-16}
 [[ $ray_num_cpus =~ ^[1-9][0-9]*$ ]] || { echo 'RAY_NUM_CPUS must be a positive integer' >&2; exit 2; }
-adv_estimator=${ADV_ESTIMATOR:-grpo}
-[[ $adv_estimator == grpo || $adv_estimator == jev_step_grpo || $adv_estimator == jev_group_grpo ]] || { echo 'invalid ADV_ESTIMATOR' >&2; exit 2; }
-jev_reward_mode=${JEV_REWARD_MODE:-trajectory_mean}
-[[ $jev_reward_mode == trajectory_mean || $jev_reward_mode == step_advantage || $jev_reward_mode == hindsight_step_advantage || $jev_reward_mode == hindsight_group_advantage || $jev_reward_mode == hindsight_step_only_advantage ]] || { echo 'invalid JEV_REWARD_MODE' >&2; exit 2; }
-if [[ $adv_estimator == jev_step_grpo && $jev_reward_mode != step_advantage && $jev_reward_mode != hindsight_step_advantage && $jev_reward_mode != hindsight_step_only_advantage ]]; then
-    echo 'jev_step_grpo requires a step-advantage JEV_REWARD_MODE' >&2
-    exit 2
-fi
-jev_verifier_weight=${JEV_VERIFIER_WEIGHT:-0.1}
-[[ $jev_verifier_weight =~ ^(0|[0-9]+([.][0-9]+)?)$ ]] || { echo 'JEV_VERIFIER_WEIGHT must be nonnegative' >&2; exit 2; }
-if [[ $adv_estimator == jev_group_grpo && $jev_reward_mode != hindsight_group_advantage ]]; then
-    echo 'jev_group_grpo requires JEV_REWARD_MODE=hindsight_group_advantage' >&2
-    exit 2
-fi
 seed=${SEED:-0}
 [[ $seed =~ ^[0-9]+$ ]] || { echo 'SEED must be a nonnegative integer' >&2; exit 2; }
 eval_split=${EVAL_SPLIT:-eval_in_distribution}
@@ -133,7 +121,6 @@ cd "$repo"
 # ponytail: 8/64 local prompts need no loader pool; revisit for much larger datasets.
 exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.main_ppo \
     algorithm.adv_estimator="$adv_estimator" +algorithm.grpo_cross_steps=false \
-    algorithm.jev_step.verifier_weight="$jev_verifier_weight" \
     data.train_files="$root/data/verl-agent/text/train.parquet" \
     data.val_files="$root/data/verl-agent/text/test.parquet" \
     data.train_batch_size="$train_batch_size" data.val_batch_size="$val_batch_size" data.shuffle=false \
@@ -169,9 +156,8 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     env.history_length=2 env.max_steps="$max_steps" env.rollout.n=4 \
     env.alfworld.eval_dataset="$eval_split" \
     +env.alfworld.no_thinking=true \
-    +env.alfworld.jev_weight="$jev_weight" \
-    +env.alfworld.jev_reward_mode="$jev_reward_mode" \
-    +env.alfworld.jev_log_path="$run_dir/jev-online.jsonl" \
+    +env.alfworld.jev_process_reward="$jev_process_reward" \
+    +env.alfworld.jev_log_path="$run_dir/jev-process.jsonl" \
     env.resources_per_worker.num_cpus=0.1 ray_init.num_cpus="$ray_num_cpus" +ray_init.address=local +ray_init.include_dashboard=false \
     trainer.logger='["console"]' trainer.project_name=jev_alfworld \
     trainer.experiment_name="$run_tag" trainer.n_gpus_per_node="$gpu_count" trainer.nnodes=1 \
