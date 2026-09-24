@@ -149,3 +149,18 @@ update. `MODEL_SHM=true` stages a model snapshot once under `/dev/shm/verl-cache
 Ray worker import failures on the shared filesystem. Both caches are optional.
 Use the same settings as an H200 starting point, then remeasure the batch and
 microbatch limits on that node.
+
+On air-node-03 (four A100s, batch 4, ten ALFWorld turns), the second update
+provides a matched comparison. Both runs used actor microbatch 2, log-prob
+microbatch 4, and a GPU-resident reference model:
+
+| Rollout scheduling | Generation | Full update | Rollout tokens | Peak reserved/GPU |
+| --- | ---: | ---: | ---: | ---: |
+| Per-turn weight sync | 132 s | 311 s | 90,971 | 25.5 GB |
+| Persistent rollout | 55 s | 240 s | 89,876 | 25.5 GB |
+
+The 23% shorter update is the useful gain here. Sampled GPU utilization was
+lower after removing repeated weight synchronization, so utilization alone is
+not a throughput measure. Warm launches still spent roughly 16–19 minutes in
+Ray, environment, and model initialization; staging the model alone did not
+remove that cost.
