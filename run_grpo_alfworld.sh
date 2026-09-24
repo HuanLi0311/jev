@@ -69,6 +69,10 @@ test_freq=${TEST_FREQ:-1}
 save_freq=${SAVE_FREQ:--1}
 val_before_train=${VAL_BEFORE_TRAIN:-true}
 [[ $val_before_train == true || $val_before_train == false ]] || { echo 'VAL_BEFORE_TRAIN must be true or false' >&2; exit 2; }
+if [[ $val_before_train == false && $test_freq == -1 && -z ${VAL_BATCH_SIZE+x} ]]; then
+    # ponytail: the trainer still creates validation actors when validation is disabled; one suffices.
+    val_batch_size=1
+fi
 optimizer_offload=${OPTIMIZER_OFFLOAD:-true}
 [[ $optimizer_offload == true || $optimizer_offload == false ]] || { echo 'OPTIMIZER_OFFLOAD must be true or false' >&2; exit 2; }
 actor_micro_batch=${ACTOR_MICRO_BATCH:-1}
