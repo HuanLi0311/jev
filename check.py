@@ -38,10 +38,20 @@ def check_formal_config():
     assert len(training["paired_seeds"]) == len(set(training["paired_seeds"]))
     assert evaluation["milestones"][0] == 0
     assert evaluation["milestones"][-1] == training["updates"]
-    assert set(evaluation["panels"].values()) <= {
-        "eval_in_distribution",
-        "eval_out_of_distribution",
+    assert evaluation["seed"] == 1000
+    assert evaluation["panels"] == {
+        "valid_seen": "eval_in_distribution",
+        "valid_unseen": "eval_out_of_distribution",
     }
+    assert training["invalid_action_shaping"] is False
+    assert config["generation"]["evaluation"] == {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "top_k": -1,
+        "do_sample": False,
+    }
+    assert config["optimization"]["learning_rate"] > 0
+    assert config["optimization"]["ppo_mini_batch_size"] > 0
     assert sum(
         parquet.read_metadata(path).num_rows for path in config["data"]["train_files"]
     ) == training["tasks"]
