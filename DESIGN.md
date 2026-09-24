@@ -321,9 +321,10 @@ paired seeds, shared optimization/generation settings, fixed evaluation panels,
 milestone schedule, and policy revision. `scripts/run_alfworld.sh` consumes it,
 records the resolved selection, rejects seed 0, and dispatches the algorithms
 selected by its `algos=(...)` suite list to their existing native trainer
-entrypoints. It applies each configured seed to the environment, dataloader,
-and vLLM and saves all declared milestone checkpoints. Do not merge the
-separate trainers into a new framework.
+entrypoints. On the eight-GPU H200 host, a suite assigns two GPUs to each arm
+and runs up to four arms concurrently. It applies each configured seed to the
+environment, dataloader, and vLLM and saves all declared milestone checkpoints.
+Do not merge the separate trainers into a new framework.
 
 All actor checkpoints are evaluated through `src/evaluator.py`, not through
 recipe-specific validation. The evaluator uses the shared actor checkpoint

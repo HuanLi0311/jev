@@ -15,12 +15,23 @@ suite_usage='usage: run_alfworld.sh RUN_TAG'
 if (( $# == 1 )); then
     suite_tag=$1
     [[ $suite_tag =~ ^[a-zA-Z0-9_-]+$ ]] || { echo 'invalid run tag' >&2; exit 2; }
+    needs_jev=false
     for selected_arm in "${algos[@]}"; do
         case $selected_arm in
             grpo|jev|gigpo|hgpo|graphgpo) ;;
             *) echo "invalid suite algorithm: $selected_arm" >&2; exit 2 ;;
         esac
+        [[ $selected_arm != jev ]] || needs_jev=true
     done
+    [[ ${CUDA_VISIBLE_DEVICES:-} =~ ^([0-9]+,){7}[0-9]+$ ]] || {
+        echo 'suite requires eight GPU indices in CUDA_VISIBLE_DEVICES' >&2
+        exit 2
+    }
+    IFS=, read -r -a suite_gpus <<< "$CUDA_VISIBLE_DEVICES"
+    [[ $(printf '%s\n' "${suite_gpus[@]}" | sort -u | wc -l) -eq 8 ]] || {
+        echo 'GPU indices must be unique' >&2
+        exit 2
+    }
     seed_output=$("$python" - "$config_path" <<'PY'
 import sys
 from pathlib import Path
@@ -37,12 +48,46 @@ print(*seeds, sep="\n")
 PY
     )
     mapfile -t suite_seeds <<< "$seed_output"
+    if [[ $needs_jev == true && ${CHECK_CONFIG_ONLY:-false} != true && -z ${TYPESAFE_API_KEY:-} ]]; then
+        read -r -s -p 'Jev API key: ' TYPESAFE_API_KEY
+        printf '\n'
+        export TYPESAFE_API_KEY
+    fi
+    pids=()
+    names=()
+    stop_children() {
+        ((${#pids[@]} == 0)) || kill "${pids[@]}" 2>/dev/null || true
+    }
+    trap stop_children INT TERM
     for selected_seed in "${suite_seeds[@]}"; do
-        for selected_arm in "${algos[@]}"; do
-            printf 'starting arm=%s seed=%s suite=%s\n' "$selected_arm" "$selected_seed" "$suite_tag"
-            "$0" "$selected_arm" "${suite_tag}-${selected_arm}-seed${selected_seed}" "$selected_seed"
+        for arm_index in "${!algos[@]}"; do
+            selected_arm=${algos[$arm_index]}
+            slot=$((${#pids[@]} * 2))
+            selected_gpus=${suite_gpus[$slot]},${suite_gpus[$((slot + 1))]}
+            run_name=${suite_tag}-${selected_arm}-seed${selected_seed}
+            printf 'starting arm=%s seed=%s suite=%s gpus=%s\n' \
+                "$selected_arm" "$selected_seed" "$suite_tag" "$selected_gpus"
+            CUDA_VISIBLE_DEVICES=$selected_gpus \
+                RAY_TMPDIR=${RAY_TMPDIR:-/dev/shm}/jev-$run_name \
+                "$0" "$selected_arm" "$run_name" "$selected_seed" &
+            pids+=("$!")
+            names+=("$selected_arm")
+            if (( ${#pids[@]} == 4 || arm_index == ${#algos[@]} - 1 )); then
+                failed=0
+                for job_index in "${!pids[@]}"; do
+                    wait "${pids[$job_index]}" || {
+                        printf 'failed arm=%s seed=%s suite=%s\n' \
+                            "${names[$job_index]}" "$selected_seed" "$suite_tag" >&2
+                        failed=1
+                    }
+                done
+                pids=()
+                names=()
+                (( failed == 0 )) || exit 1
+            fi
         done
     done
+    trap - INT TERM
     exit 0
 fi
 

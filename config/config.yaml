@@ -54,7 +54,7 @@ runtime:
   optimizer_offload: true
   reference_parameter_offload: true
   persistent_rollout: false
-  rollout_gpu_memory_utilization: 0.40
+  rollout_gpu_memory_utilization: 0.20
   tensor_model_parallel_size: 2
   ray_num_cpus: 32
   use_remove_padding: true

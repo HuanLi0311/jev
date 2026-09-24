@@ -61,6 +61,7 @@ def check_formal_config():
     assert config["optimization"]["ppo_mini_batch_size"] == 256
     assert config["optimization"]["use_kl_in_reward"] is False
     runtime = config["runtime"]
+    assert runtime["rollout_gpu_memory_utilization"] == 0.20
     assert runtime["tensor_model_parallel_size"] == 2
     assert runtime["use_remove_padding"] is True
     assert runtime["enforce_eager"] is False
