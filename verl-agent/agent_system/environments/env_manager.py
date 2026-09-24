@@ -640,15 +640,33 @@ def make_envs(config):
         else:
             raise ValueError(f"Unsupported environment: {config.env.env_name}")
 
-        env_kwargs = {
-            'eval_dataset': config.env.alfworld.eval_dataset, # 'eval_in_distribution' or 'eval_out_of_distribution'
-        }
-        _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
-        _val_envs = build_alfworld_envs(alf_config_path, config.env.seed + 1000, config.data.val_batch_size, 1, is_train=False, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
-        
         projection_f = partial(alfworld_projection, require_think=not config.env.alfworld.get('no_thinking', False))
+        _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, resources_per_worker=resources_per_worker)
         envs = AlfWorldEnvironmentManager(_envs, projection_f, config)
-        val_envs = AlfWorldEnvironmentManager(_val_envs, projection_f, config)
+
+        panels = config.env.alfworld.get('eval_panels')
+        if panels:
+            eval_seed = config.env.alfworld.eval_seed
+            val_envs = {}
+            for panel_name, eval_dataset in panels.items():
+                # ponytail: build one panel only when it is evaluated; 256 idle
+                # TextWorld actors would otherwise compete with training workers.
+                def build_panel(dataset=eval_dataset):
+                    raw_envs = build_alfworld_envs(
+                        alf_config_path, eval_seed, config.data.val_batch_size, 1,
+                        is_train=False, env_kwargs={'eval_dataset': dataset},
+                        resources_per_worker=resources_per_worker,
+                    )
+                    return AlfWorldEnvironmentManager(raw_envs, projection_f, config)
+                val_envs[str(panel_name)] = build_panel
+        else:
+            eval_dataset = config.env.alfworld.eval_dataset
+            _val_envs = build_alfworld_envs(
+                alf_config_path, config.env.seed + 1000, config.data.val_batch_size, 1,
+                is_train=False, env_kwargs={'eval_dataset': eval_dataset},
+                resources_per_worker=resources_per_worker,
+            )
+            val_envs = AlfWorldEnvironmentManager(_val_envs, projection_f, config)
         return envs, val_envs
     elif "sokoban" in config.env.env_name.lower():
         from agent_system.environments.env_package.sokoban import build_sokoban_envs, sokoban_projection

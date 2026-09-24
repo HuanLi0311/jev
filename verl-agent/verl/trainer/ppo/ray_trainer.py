@@ -730,6 +730,23 @@ class RayPPOTrainer:
         self.validation_generations_logger.log(self.config.trainer.logger, samples, self.global_steps)
 
     def _validate(self):
+        if not isinstance(self.val_envs, dict):
+            return self._validate_one(self.val_envs)
+
+        metrics = {}
+        for panel_name, build_envs in self.val_envs.items():
+            panel_envs = build_envs()
+            try:
+                panel_metrics = self._validate_one(panel_envs, panel_name)
+            finally:
+                panel_envs.close()
+            duplicate_keys = metrics.keys() & panel_metrics.keys()
+            if duplicate_keys:
+                raise ValueError(f"duplicate validation metrics: {sorted(duplicate_keys)}")
+            metrics.update(panel_metrics)
+        return metrics
+
+    def _validate_one(self, val_envs, panel_name=None):
         reward_tensor_lst = []
         data_source_lst = []
         tool_calling_list = []
@@ -787,7 +804,7 @@ class RayPPOTrainer:
             test_output_gen_batch = self.traj_collector.multi_turn_loop(
                                                     gen_batch=test_gen_batch,
                                                     actor_rollout_wg=self.actor_rollout_wg,
-                                                    envs=self.val_envs,
+                                                    envs=val_envs,
                                                     is_train=False,
                                                     )
             print('validation generation end')
@@ -842,6 +859,8 @@ class RayPPOTrainer:
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
         validation_data_dir = self.config.trainer.get("validation_data_dir", None)
         if validation_data_dir:
+            if panel_name:
+                validation_data_dir = os.path.join(validation_data_dir, panel_name)
             self._dump_generations(
                 inputs=sample_inputs,
                 outputs=sample_outputs,
@@ -889,6 +908,11 @@ class RayPPOTrainer:
         for k, v in success_rate.items():
             metric_dict[f'val/{k}'] = v
 
+        if panel_name:
+            metric_dict = {
+                key.replace('val/', f'val/{panel_name}/', 1): value
+                for key, value in metric_dict.items()
+            }
         return metric_dict
 
     def init_workers(self):
