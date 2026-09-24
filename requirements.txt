@@ -1,9 +1,5 @@
-# Tested online ALFWorld stack (Python 3.10.20, air-node-03).
-# CUDA drivers and the local model/data caches are host resources, not pip deps.
-# Install the adapted trainer separately so pip does not replace its tested deps:
 #   python -m pip install -e ./verl-agent --no-deps
 # The maintained launcher also prepends ./verl-agent to PYTHONPATH.
-# Offline vendor benchmarks keep their own requirements under vendor/.
 
 accelerate==1.14.0
 alfworld==0.4.2
