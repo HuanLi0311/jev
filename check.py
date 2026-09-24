@@ -13,13 +13,42 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "verl-agent"))
 
 import numpy as np
 import torch
+import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from agent_system.environments.env_manager import AlfWorldEnvironmentManager
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
 from score_jev import public_completed_trajectory, questions_for_steps
 from verl.trainer.ppo.core_algos import compute_jev_step_grpo_advantage
 from verl.workers.fsdp_workers import ActorRolloutRefWorker
+
+
+def check_formal_config():
+    config = yaml.safe_load(
+        (Path(__file__).resolve().parent / "config" / "config..yaml").read_text()
+    )
+    assert config["training"] == {
+        "task_groups_per_update": 16,
+        "rollouts_per_group": 8,
+        "max_steps": 50,
+        "history_length": 2,
+        "updates": 150,
+        "paired_seeds": [1, 2, 3],
+    }
+    assert config["evaluation"] == {
+        "tasks_per_panel": 128,
+        "seed": 1000,
+        "panels": {
+            "valid_seen": "eval_in_distribution",
+            "valid_unseen": "eval_out_of_distribution",
+        },
+        "milestones": [0, 10, 40, 80, 150],
+    }
+    assert config["invalid_action_shaping"]["modes"] == {
+        "off": False,
+        "on": True,
+    }
 
 
 def check_public_input():
@@ -89,6 +118,19 @@ def check_advantage():
     assert torch.allclose(advantages, expected, atol=1e-6)
     assert torch.equal(advantages, returns)
     assert metrics["nonzero_transition_fraction"] == 2 / 3
+
+    shaped, _, shaped_metrics = compute_jev_step_grpo_advantage(
+        action_valids=np.array([1, 0, 0]),
+        invalid_action_penalty=0.1,
+        token_level_rewards=torch.zeros_like(masks),
+        **kwargs,
+    )
+    assert torch.allclose(shaped, expected - torch.tensor([
+        [0.0, 0.0, 0.0],
+        [0.1, 0.0, 0.0],
+        [0.1, 0.1, 0.1],
+    ]), atol=1e-6)
+    assert shaped_metrics["invalid_action_fraction"] == 2 / 3
 
     # The verifier outcome conditions Jev upstream, but is not added to A again.
     changed_outcomes, _, _ = compute_jev_step_grpo_advantage(
@@ -212,6 +254,7 @@ def check_persistent_rollout():
 
 
 def main():
+    check_formal_config()
     check_public_input()
     check_action_format()
     check_advantage()
