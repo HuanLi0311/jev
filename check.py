@@ -33,7 +33,7 @@ def check_formal_config():
     )
     training = config["training"]
     evaluation = config["evaluation"]
-    assert training["task"] > 0 and training["samples"] > 0
+    assert training["tasks"] > 0 and training["rollouts"] > 0
     assert 0 not in training["paired_seeds"]
     assert len(training["paired_seeds"]) == len(set(training["paired_seeds"]))
     assert evaluation["milestones"][0] == 0
@@ -44,7 +44,7 @@ def check_formal_config():
     }
     assert sum(
         parquet.read_metadata(path).num_rows for path in config["data"]["train_files"]
-    ) == training["task"]
+    ) == training["tasks"]
     assert sum(
         parquet.read_metadata(path).num_rows
         for path in config["data"]["validation_files"]
