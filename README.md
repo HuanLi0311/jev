@@ -140,27 +140,38 @@ the launcher then creates only one unused validation actor. Compare
 memory/utilization after the first training step. Run artifacts stay under
 `runs/grpo-alfworld-RUN_TAG/`.
 
-For the four-GPU V4 Qwen2.5-1.5B pilot, the measured faster settings are
-`ACTOR_MICRO_BATCH=2`, `LOG_PROB_MICRO_BATCH=4`, `REF_PARAM_OFFLOAD=false`,
-`OPTIMIZER_OFFLOAD=false`, and `PERSISTENT_ROLLOUT=true`. The persistent rollout keeps
-vLLM weights resident across ALFWorld turns and releases them before the actor
-update. `MODEL_SHM=true` stages a model snapshot once under `/dev/shm/verl-cache`;
+For the four-GPU V4 Qwen2.5-1.5B pilot, set `REF_PARAM_OFFLOAD=false`,
+`OPTIMIZER_OFFLOAD=false`, and `PERSISTENT_ROLLOUT=true`. The persistent rollout
+keeps vLLM weights resident across ALFWorld turns and releases them before the
+actor update. The fastest measured short-run setting also uses
+`TRAIN_BATCH_SIZE=8 ACTOR_MICRO_BATCH=4 LOG_PROB_MICRO_BATCH=8 OMP_NUM_THREADS=4`.
+Batch 8 changes the training batch, so keep batch size matched for algorithm
+comparisons. `MODEL_SHM=true` stages a model snapshot under `/dev/shm/verl-cache`;
 `STDLIB_SHM=true` stages the small Python standard library to avoid intermittent
 Ray worker import failures on the shared filesystem. Both caches are optional.
-Use the same settings as an H200 starting point, then remeasure the batch and
-microbatch limits on that node.
+Use these as an H200 starting point, then remeasure batch and microbatch limits.
 
 On air-node-03 (four A100s, batch 4, ten ALFWorld turns), the second update
 provides a matched comparison. Both runs used actor microbatch 2, log-prob
 microbatch 4, and a GPU-resident reference model:
 
-| Rollout scheduling | Generation | Full update | Rollout tokens | Peak reserved/GPU |
+| Rollout scheduling | Generation | Full update | Processed tokens | Peak reserved/GPU |
 | --- | ---: | ---: | ---: | ---: |
 | Per-turn weight sync | 132 s | 311 s | 90,971 | 25.5 GB |
 | Persistent rollout | 55 s | 240 s | 89,876 | 25.5 GB |
 
-The 23% shorter update is the useful gain here. Sampled GPU utilization was
-lower after removing repeated weight synchronization, so utilization alone is
-not a throughput measure. Warm launches still spent roughly 16–19 minutes in
-Ray, environment, and model initialization; staging the model alone did not
-remove that cost.
+Persistent scheduling cut the matched full update by 23%.
+
+At batch 8 with the same 125,828 processed tokens in each one-update run,
+raising actor/log-prob microbatches from 2/4 to 4/8 reduced actor update time
+from 267 to 147 seconds and full update time from 426 to 276 seconds. Peak
+PyTorch reserved memory rose from 25.4 to 27.9 GB per A100. This is 54% more
+processed tokens per training second; both runs completed without OOM or
+DataLoader shutdown errors.
+
+Sampled GPU utilization fell from 77% to 68% in that comparison even as
+throughput rose, so utilization alone is not a throughput measure. Launch to
+first training step took about 14–15 minutes with one validation actor, zero
+DataLoader workers, and four CPU threads; earlier warm launches took about
+16–19 minutes. Shared-node startup varies, and staging the model alone did not
+remove Ray or FSDP initialization cost.
