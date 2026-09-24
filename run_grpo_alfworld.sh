@@ -100,7 +100,7 @@ fi
 model_shm=${MODEL_SHM:-false}
 [[ $model_shm == true || $model_shm == false ]] || { echo 'MODEL_SHM must be true or false' >&2; exit 2; }
 if [[ $model_shm == true ]]; then
-    # ponytail: rsync reuses warm weights and copies cold weights without importing verl.
+    # ponytail: one lock serializes cold copies; use per-model locks if staging many models.
     model_hash=$(printf %s "$model_path" | md5sum | cut -d' ' -f1)
     model_cache=/dev/shm/verl-cache/$model_hash/$(basename "$model_path")
     mkdir -p "$model_cache"
