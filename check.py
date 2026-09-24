@@ -71,11 +71,18 @@ def check_formal_config():
 
 
 def check_eval_task_assignment():
-    assert [worker_seed_and_offset(1000, i, False) for i in range(128)] == [
-        (1000, i) for i in range(128)
+    config = yaml.safe_load(
+        (Path(__file__).resolve().parent / "config" / "config.yaml").read_text()
+    )
+    eval_tasks = config["evaluation"]["tasks"]
+    train_tasks = config["training"]["tasks"]
+    eval_seed = config["evaluation"]["seed"]
+    train_seed = config["training"]["paired_seeds"][0]
+    assert [worker_seed_and_offset(eval_seed, i, False) for i in range(eval_tasks)] == [
+        (eval_seed, i) for i in range(eval_tasks)
     ]
-    assert [worker_seed_and_offset(1, i, True) for i in range(16)] == [
-        (1 + i, 0) for i in range(16)
+    assert [worker_seed_and_offset(train_seed, i, True) for i in range(train_tasks)] == [
+        (train_seed + i, 0) for i in range(train_tasks)
     ]
 
 
