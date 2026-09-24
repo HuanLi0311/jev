@@ -275,6 +275,8 @@ def aggregate_panel(raw_path: Path, task_path: Path) -> dict[str, Any]:
         if len(scores) != 1:
             raise ValueError(f"trajectory {trajectory_id} has inconsistent scores")
         score = scores.pop()
+        prompt_tokens = sum(int(row.get("prompt_tokens", 0)) for row in rows)
+        response_tokens = sum(int(row.get("response_tokens", 0)) for row in rows)
         records.append(
             {
                 "task_uid": task_ids.pop(),
@@ -283,6 +285,9 @@ def aggregate_panel(raw_path: Path, task_path: Path) -> dict[str, Any]:
                 "score": score,
                 "steps": len(rows),
                 "valid_actions": sum(bool(row["is_action_valid"]) for row in rows),
+                "prompt_tokens": prompt_tokens,
+                "response_tokens": response_tokens,
+                "total_tokens": prompt_tokens + response_tokens,
             }
         )
     records.sort(key=lambda row: (row["task_uid"], row["trajectory_id"]))
@@ -301,6 +306,9 @@ def aggregate_panel(raw_path: Path, task_path: Path) -> dict[str, Any]:
             sum(record["valid_actions"] for record in records) / transitions
         ),
         "transitions": transitions,
+        "prompt_tokens": sum(record["prompt_tokens"] for record in records),
+        "response_tokens": sum(record["response_tokens"] for record in records),
+        "total_tokens": sum(record["total_tokens"] for record in records),
         "task_records": str(task_path),
         "raw_records": str(raw_path),
     }

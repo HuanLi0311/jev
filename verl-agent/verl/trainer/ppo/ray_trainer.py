@@ -819,6 +819,17 @@ class RayPPOTrainer:
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
             sample_inputs.extend(input_texts)
             sample_outputs.extend(output_texts)
+            prompt_length = prompt_ids.shape[-1]
+            prompt_tokens = test_output_gen_batch.batch["attention_mask"][
+                :, :prompt_length
+            ].sum(-1).cpu().tolist()
+            response_tokens = test_output_gen_batch.batch["response_mask"].sum(-1).cpu().tolist()
+            sample_extra_infos["prompt_tokens"].extend(prompt_tokens)
+            sample_extra_infos["response_tokens"].extend(response_tokens)
+            sample_extra_infos["total_tokens"].extend(
+                prompt + response
+                for prompt, response in zip(prompt_tokens, response_tokens, strict=True)
+            )
 
             # test_batch = test_batch.union(test_output_gen_batch)
 
@@ -829,7 +840,9 @@ class RayPPOTrainer:
             sample_scores.extend(scores)
             for key in (
                 "uid", "task_uid", "traj_uid", "visible_prompt", "anchor_obs", "action_text",
-                "turn_index", "is_action_valid", "data_source",
+                "observed_result", "turn_index", "is_action_valid", "done", "rewards",
+                "episode_rewards", "episode_success", "episode_lengths", "tool_callings",
+                "data_source",
             ):
                 if key not in test_output_gen_batch.non_tensor_batch:
                     continue
@@ -838,8 +851,10 @@ class RayPPOTrainer:
                     continue
                 if key == "turn_index":
                     sample_extra_infos[key].extend(int(value) for value in values)
-                elif key == "is_action_valid":
+                elif key in {"is_action_valid", "done", "episode_success"}:
                     sample_extra_infos[key].extend(bool(value) for value in values)
+                elif key in {"rewards", "episode_rewards", "episode_lengths", "tool_callings"}:
+                    sample_extra_infos[key].extend(float(value) for value in values)
                 else:
                     sample_extra_infos[key].extend(str(value) for value in values)
 
