@@ -16,6 +16,7 @@ import torch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from evaluator import aggregate_panel
 from agent_system.environments.env_manager import AlfWorldEnvironmentManager
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
@@ -277,6 +278,26 @@ def check_validation_panels():
     assert closed == ["valid_seen", "valid_unseen"]
 
 
+def check_evaluator_summary():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        raw_path = root / "0.jsonl"
+        rows = [
+            {"traj_uid": "a", "task_uid": "task-a", "turn_index": 0,
+             "score": 0, "is_action_valid": True},
+            {"traj_uid": "a", "task_uid": "task-a", "turn_index": 1,
+             "score": 1, "is_action_valid": True},
+            {"traj_uid": "b", "task_uid": "task-b", "turn_index": 0,
+             "score": 0, "is_action_valid": False},
+        ]
+        raw_path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+        summary = aggregate_panel(raw_path, root / "tasks-0.jsonl")
+        assert summary["tasks"] == 2
+        assert summary["success_rate"] == 0.5
+        assert summary["transitions"] == 3
+        assert summary["valid_action_rate"] == 2 / 3
+
+
 def main():
     check_formal_config()
     check_public_input()
@@ -285,6 +306,7 @@ def main():
     check_post_episode_annotation()
     check_persistent_rollout()
     check_validation_panels()
+    check_evaluator_summary()
     print("Jev process-reward integration check passed")
 
 
