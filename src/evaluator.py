@@ -27,6 +27,24 @@ EXPECTED_PANELS = {
 }
 
 
+def validate_slot_files(paths: list[str], expected: int, split: str) -> None:
+    import pyarrow.parquet as parquet
+
+    resolved = [str(Path(path).resolve()) for path in paths]
+    if not resolved or len(resolved) != len(set(resolved)):
+        raise ValueError(f"{split} parquet paths must be nonempty and unique")
+    rows = [
+        row
+        for path in resolved
+        for row in parquet.read_table(path).to_pylist()
+    ]
+    slots = [row.get("extra_info", {}).get("slot") for row in rows]
+    if len(rows) != expected or None in slots or len(set(slots)) != expected:
+        raise ValueError(f"{split} parquet must contain {expected} unique slot IDs")
+    if any(row.get("data_source") != "alfworld" for row in rows):
+        raise ValueError(f"{split} parquet data_source must be alfworld")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("checkpoint", help="global_step_N directory, or 'base'")
@@ -50,9 +68,14 @@ def load_config(path: Path) -> dict[str, Any]:
     model_path = Path(config.get("model_path", ""))
     if not (model_path / "config.json").is_file():
         raise ValueError(f"model snapshot is unavailable: {model_path}")
-    validation_files = config.get("data", {}).get("validation_files", [])
+    data = config.get("data", {})
+    validation_files = data.get("validation_files", [])
     if not validation_files or any(not Path(path).is_file() for path in validation_files):
         raise ValueError("data.validation_files must contain existing files")
+    validate_slot_files(
+        data.get("train_files", []), config["training"]["tasks"], "training"
+    )
+    validate_slot_files(validation_files, evaluation["tasks"], "evaluation")
     generation = config.get("generation", {}).get("evaluation", {})
     if generation.get("do_sample") is not False or generation.get("temperature") != 0.0:
         raise ValueError("formal evaluation must use greedy decoding")
@@ -253,8 +276,10 @@ def aggregate_panel(raw_path: Path, task_path: Path) -> dict[str, Any]:
         for record in records:
             target.write(json.dumps(record, ensure_ascii=False) + "\n")
     transitions = sum(record["steps"] for record in records)
+    unique_tasks = len({record["task_uid"] for record in records})
     return {
         "tasks": len(records),
+        "unique_tasks": unique_tasks,
         "success_rate": sum(record["success"] for record in records) / len(records),
         "mean_score": sum(record["score"] for record in records) / len(records),
         "mean_steps": transitions / len(records),
@@ -325,6 +350,11 @@ def run() -> None:
                 raise ValueError(
                     f"{panel} produced {summary['tasks']} tasks, expected "
                     f"{config['evaluation']['tasks']}"
+                )
+            if summary["unique_tasks"] != config["evaluation"]["tasks"]:
+                raise ValueError(
+                    f"{panel} produced {summary['unique_tasks']} unique tasks, "
+                    f"expected {config['evaluation']['tasks']}"
                 )
             summaries[panel] = summary
         manifest.update({"status": "complete", "results": summaries})
