@@ -58,7 +58,8 @@ PY
     stop_children() {
         ((${#pids[@]} == 0)) || kill "${pids[@]}" 2>/dev/null || true
     }
-    trap stop_children INT TERM
+    trap 'stop_children; exit 130' INT
+    trap 'stop_children; exit 143' TERM
     for selected_seed in "${suite_seeds[@]}"; do
         for arm_index in "${!algos[@]}"; do
             selected_arm=${algos[$arm_index]}
