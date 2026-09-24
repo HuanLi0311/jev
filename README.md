@@ -56,7 +56,7 @@ algos=(grpo jev gigpo graphgpo)
 正式运行前先验证配置和调度，不会启动训练：
 
 ```bash
-conda activate jev-alfworld
+conda activate jev
 cd jev
 
 CHECK_CONFIG_ONLY=true CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
