@@ -1,8 +1,10 @@
 > **Local Jev adaptation.** This copy is the training backend for
 > [`../README.md`](../README.md). It keeps the local rollout/microbatch/offload
 > optimizations and adds one post-episode Jev process-reward estimator with
-> `A = confidence * (2 * score - 1)`. Use `../scripts/run_grpo_alfworld.sh`; the upstream
-> project documentation below is retained for reference.
+> `A = confidence * (2 * score - 1)`. Use `../scripts/run_grpo_alfworld.sh`;
+> its formal scale and evaluation schedule come only from
+> `../config/config..yaml`. The upstream project documentation below is
+> retained for reference.
 
 <p align="center">
     <img src="./docs/gigpo/logo-verl-agent.png" alt="logo" width="55%">

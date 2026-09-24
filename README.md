@@ -138,23 +138,37 @@ standard sparse GRPO for `baseline` and the sole Jev process-reward estimator
 for `jev`; there are no version or reward-mode switches:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 MODEL_PATH=/path/to/Qwen2.5-1.5B \
-  ./scripts/run_grpo_alfworld.sh jev RUN_TAG
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
+  ./scripts/run_grpo_alfworld.sh jev RUN_TAG 1 off
 ```
 
-For a one-update timing check, additionally set
-`TRAIN_UPDATES=1 MAX_STEPS=10 VAL_BEFORE_TRAIN=false TEST_FREQ=-1 SAVE_FREQ=-1`.
-Compare `timing_s/gen`, `timing_s/update_actor`, `timing_s/step`, processed
-tokens, and peak GPU memory. Artifacts stay under
-`runs/grpo-alfworld-RUN_TAG/`.
+[`config/config..yaml`](config/config..yaml) is the single source of truth for
+the formal scale: 16 task groups per update, eight rollouts per group, 50
+actions, 150 updates, paired seeds 1/2/3, fixed 128-task `valid_seen` and
+`valid_unseen` panels, and checkpoint/evaluation milestones 0/10/40/80/150.
+The fourth launcher argument selects the declared invalid-action shaping mode:
+`off` is the controlled main table and `on` is the separate 0.1-penalty
+ablation. Omit it to use the YAML's `default`. Seed 0 is rejected. Validate a
+selection without creating a run with:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 CHECK_CONFIG_ONLY=true \
+  ./scripts/run_grpo_alfworld.sh jev check 1 off
+```
+
+The launcher copies the experiment YAML and selected seed/mode into the run
+directory and refuses a resume if they differ. Per-task validation records are
+stored by split under `evaluations/`; artifacts otherwise stay under
+`runs/grpo-alfworld-RUN_TAG/`. To run a reduced infrastructure check, point
+`CONFIG_PATH` at a separate YAML instead of overriding formal scale values with
+environment variables.
 
 For the four-GPU Qwen2.5-1.5B pilot, set `REF_PARAM_OFFLOAD=false`,
 `OPTIMIZER_OFFLOAD=false`, and `PERSISTENT_ROLLOUT=true`. The persistent rollout
 keeps vLLM weights resident across ALFWorld turns and releases them before the
 actor update. The fastest measured short-run setting also uses
-`TRAIN_BATCH_SIZE=8 ACTOR_MICRO_BATCH=4 LOG_PROB_MICRO_BATCH=8 OMP_NUM_THREADS=4`.
-Batch 8 changes the training batch, so keep batch size matched for algorithm
-comparisons. `MODEL_SHM=true` stages a model snapshot under `/dev/shm/verl-cache`;
+`ACTOR_MICRO_BATCH=4 LOG_PROB_MICRO_BATCH=8 OMP_NUM_THREADS=4`.
+`MODEL_SHM=true` stages a model snapshot under `/dev/shm/verl-cache`;
 `STDLIB_SHM=true` stages the small Python standard library to avoid intermittent
 Ray worker import failures on the shared filesystem. Both caches are optional.
 Use these as an H200 starting point, then remeasure batch and microbatch limits.

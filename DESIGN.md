@@ -299,7 +299,7 @@ shrinking them to the pilot:
 - 16 task groups per update and eight rollouts per group;
 - 50 environment steps per trajectory and history length two;
 - 150 matched updates for every arm;
-- three fresh paired training seeds, excluding development seed 0;
+- three fresh paired training seeds `[1, 2, 3]`, excluding development seed 0;
 - deterministic checkpoints at updates 0, 10, 40, 80, and 150;
 - a fixed 128-task `valid_seen` panel and a fixed 128-task `valid_unseen`
   panel, identical across algorithms and training seeds;
@@ -312,19 +312,22 @@ five-update GRPO/Jev pair. These are infrastructure and cost checks, not model
 selection. If the measured budget must be reduced, reduce it identically for
 all arms and freeze the new budget before inspecting benchmark outcomes.
 
-The current local launcher is not yet this formal harness: it accepts only the
-GRPO and Jev arms and hard-codes four rollouts per group. The minimum required
-engineering change is to expose the common scale parameters and add thin
-method dispatch while retaining each public method's native trainer entrypoint.
-Do not merge the separate trainers into a new framework.
+`config/config..yaml` is the single executable source for the common scale,
+paired seeds, fixed evaluation panels, milestone schedule, policy revision,
+and invalid-action ablation. The GRPO/Jev launcher consumes it without local
+scale defaults, records it in each run directory, rejects seed 0, and evaluates
+the two panels lazily at the declared milestones. Thin method dispatch for
+GiGPO, HGPO, and GraphGPO remains to be added while retaining each public
+method's native trainer entrypoint. Do not merge the separate trainers into a
+new framework.
 
 The controlled main table uses binary terminal success with invalid-action
-shaping disabled for every method. The public GiGPO/HGPO/GraphGPO launchers
-enable a `0.1` invalid-action penalty, but the maintained Jev estimator builds
-its advantages directly from `q` and `c`, so merely enabling the same config
-flag would not apply an equivalent gradient signal. Any official-recipe
-systems comparison with invalid-action shaping must therefore be a separate,
-explicitly labeled experiment rather than mixed into the controlled table.
+shaping disabled for every method. The separate YAML mode `on` applies the
+public-recipe coefficient `0.1`; for Jev it changes only the invalid turn to
+`c*(2*q-1)-0.1`, rather than silently mutating an outcome reward that its
+estimator ignores. Any official-recipe systems comparison with this shaping
+must remain a separately labeled ablation rather than being mixed into the
+controlled table.
 
 ### Benchmark and repository matrix
 
