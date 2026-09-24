@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Edit this one list to select the arms in a suite run.
-algos=(grpo jev gigpo hgpo graphgpo)
+algos=(grpo jev gigpo)
 
 root=/home/JJ_Group/lih2511
 project=$root/test/jev
