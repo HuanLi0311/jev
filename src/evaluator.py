@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -325,6 +326,7 @@ def run() -> None:
     manifest_path = output / "manifest.json"
     manifest = {
         "status": "running",
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "checkpoint": "base" if checkpoint is None else str(checkpoint),
         "checkpoint_step": step,
         "source": source_selection(checkpoint),
@@ -351,7 +353,15 @@ def run() -> None:
         }
     )
     try:
-        subprocess.run(command, cwd=REPO, env=environment, check=True)
+        with (output / "evaluation.log").open("x", encoding="utf-8") as log:
+            subprocess.run(
+                command,
+                cwd=REPO,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=True,
+            )
         summaries = {}
         for panel in EXPECTED_PANELS:
             raw_path = output / panel / f"{step}.jsonl"
@@ -375,6 +385,7 @@ def run() -> None:
         manifest["status"] = "failed"
         raise
     finally:
+        manifest["finished_at"] = datetime.now(timezone.utc).isoformat()
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     (output / "summary.json").write_text(
         json.dumps(summaries, indent=2) + "\n"
