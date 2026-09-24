@@ -41,8 +41,8 @@ def positive(section, key):
     return value
 
 training = config.get("training", {})
-groups = positive(training, "task_groups_per_update")
-rollouts = positive(training, "rollouts_per_group")
+groups = positive(training, "task")
+rollouts = positive(training, "samples")
 max_steps = positive(training, "max_steps")
 history_length = training.get("history_length")
 if type(history_length) is not int or history_length < 0:

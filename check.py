@@ -32,8 +32,8 @@ def check_formal_config():
         (Path(__file__).resolve().parent / "config" / "config.yaml").read_text()
     )
     assert config["training"] == {
-        "task_groups_per_update": 16,
-        "rollouts_per_group": 8,
+        "task": 16,
+        "samples": 8,
         "max_steps": 50,
         "history_length": 2,
         "updates": 150,
