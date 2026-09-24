@@ -96,22 +96,12 @@ fi
 model_shm=${MODEL_SHM:-false}
 [[ $model_shm == true || $model_shm == false ]] || { echo 'MODEL_SHM must be true or false' >&2; exit 2; }
 if [[ $model_shm == true ]]; then
-    # ponytail: reuse a verified warm cache without importing verl for every launch.
+    # ponytail: rsync reuses warm weights and copies cold weights without importing verl.
     model_hash=$(printf %s "$model_path" | md5sum | cut -d' ' -f1)
     model_cache=/dev/shm/verl-cache/$model_hash/$(basename "$model_path")
-    if [[ -d $model_cache ]] && cache_diff=$(rsync -ainL --delete "$model_path/" "$model_cache/") && [[ -z $cache_diff ]]; then
-        model_path=$model_cache
-    else
-        model_path=$(flock /dev/shm/jev-model-cache.lock "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" - "$model_path" <<'PY'
-import contextlib
-import sys
-from verl.utils.fs import copy_to_shm
-with contextlib.redirect_stdout(sys.stderr):
-    staged = copy_to_shm(sys.argv[1])
-print(staged)
-PY
-        )
-    fi
+    mkdir -p "$model_cache"
+    flock /dev/shm/jev-model-cache.lock rsync -aL --delete "$model_path/" "$model_cache/"
+    model_path=$model_cache
 fi
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
 ray_num_cpus=${RAY_NUM_CPUS:-16}
