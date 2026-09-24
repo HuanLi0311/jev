@@ -64,9 +64,11 @@ class AlfworldWorker:
     Each actor holds one environment instance.
     """
     
-    def __init__(self, config, seed, base_env):
+    def __init__(self, config, seed, base_env, game_offset=0):
         self.env = base_env.init_env(batch_size=1)  # Each worker holds only one sub-environment
         self.env.seed(seed)
+        if game_offset:
+            self.env.skip(game_offset)
     
     def step(self, action):
         """Execute a step in the environment"""
@@ -100,6 +102,11 @@ class AlfworldEnvs(gym.Env):
         config = load_config_file(alf_config_path)
         env_type = config['env']['type']
         base_env = get_environment(env_type)(config, train_eval='train' if is_train else eval_dataset)
+        if not is_train and env_num > len(base_env.game_files):
+            raise ValueError(
+                f"evaluation requests {env_num} unique tasks from a pool of "
+                f"{len(base_env.game_files)}"
+            )
         self.multi_modal = (env_type == 'AlfredThorEnv')
         self.num_processes = env_num * group_n
         self.group_n = group_n
@@ -108,7 +115,11 @@ class AlfworldEnvs(gym.Env):
         env_worker = ray.remote(**resources_per_worker)(AlfworldWorker)
         self.workers = []
         for i in range(self.num_processes):
-            worker = env_worker.remote(config, seed + (i // self.group_n), base_env)
+            task_index = i // self.group_n
+            # Evaluation uses one permutation and distinct task offsets.
+            worker_seed = seed + task_index if is_train else seed
+            game_offset = 0 if is_train else task_index
+            worker = env_worker.remote(config, worker_seed, base_env, game_offset)
             self.workers.append(worker)
 
         self.prev_admissible_commands = [None for _ in range(self.num_processes)]

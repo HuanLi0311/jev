@@ -72,6 +72,8 @@ temp/
 *.h5
 *.hdf5
 *.parquet
+!config/alfworld-train-slots.parquet
+!config/alfworld-eval-slots.parquet
 *.sqlite
 *.sqlite3
 *.db

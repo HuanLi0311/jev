@@ -1,15 +1,11 @@
 model_path: /home/JJ_Group/lih2511/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306
 
-# These are prompt placeholders; ALFWorld supplies the actual tasks on reset.
-# Repeating the installed 8/64-row files makes one 16/128-row batch without
-# copying or mutating the shared source files.
+# These unique rows are batch slots; ALFWorld supplies the actual tasks on reset.
 data:
   train_files:
-    - /home/JJ_Group/lih2511/data/verl-agent/text/train.parquet
-    - /home/JJ_Group/lih2511/data/verl-agent/text/train.parquet
+    - /home/JJ_Group/lih2511/test/jev/config/alfworld-train-slots.parquet
   validation_files:
-    - /home/JJ_Group/lih2511/data/verl-agent/text/test.parquet
-    - /home/JJ_Group/lih2511/data/verl-agent/text/test.parquet
+    - /home/JJ_Group/lih2511/test/jev/config/alfworld-eval-slots.parquet
   shuffle: false
   filter_overlong_prompts: true
   truncation: left

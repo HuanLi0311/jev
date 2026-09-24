@@ -324,7 +324,9 @@ new framework.
 All actor checkpoints are evaluated through `src/evaluator.py`, not through
 recipe-specific validation. The evaluator uses the shared actor checkpoint
 format, greedy decoding, fixed seed 1000, and the same 128-task `valid_seen` and
-`valid_unseen` panels, and preserves raw transitions plus per-task records.
+`valid_unseen` panels. Each panel is one seed-1000 permutation sampled without
+replacement, must contain 128 unique environment task IDs, and preserves raw
+transitions plus per-task records.
 
 The controlled main table uses binary terminal success with invalid-action
 shaping permanently disabled in the maintained launcher. Jev credit remains
