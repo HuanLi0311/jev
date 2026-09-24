@@ -138,7 +138,9 @@ Use `run_grpo_alfworld.sh` for one-update timing checks before a full run. Set
 the launcher then creates only one unused validation actor. Compare
 `timing_s/gen`, `timing_s/update_actor`, `timing_s/step`, rollout tokens, and GPU
 memory/utilization after the first training step. Run artifacts stay under
-`runs/grpo-alfworld-RUN_TAG/`.
+`runs/grpo-alfworld-RUN_TAG/`. For V4, set `ADV_ESTIMATOR=jev_step_grpo`,
+`JEV_REWARD_MODE=hindsight_step_only_advantage`, `MODEL_PATH` to the local
+Qwen2.5-1.5B snapshot, and `CUDA_VISIBLE_DEVICES` to the selected four GPUs.
 
 For the four-GPU V4 Qwen2.5-1.5B pilot, set `REF_PARAM_OFFLOAD=false`,
 `OPTIMIZER_OFFLOAD=false`, and `PERSISTENT_ROLLOUT=true`. The persistent rollout
