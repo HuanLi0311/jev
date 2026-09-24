@@ -1,4 +1,4 @@
-# Jev ALFWorld experiments
+# experiments
 
 ## 1. 环境配置
 
