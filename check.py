@@ -57,13 +57,16 @@ def check_formal_config():
     assert config["optimization"]["learning_rate"] > 0
     assert config["optimization"]["ppo_mini_batch_size"] > 0
     assert config["optimization"]["use_kl_in_reward"] is False
-    assert sum(
-        parquet.read_metadata(path).num_rows for path in config["data"]["train_files"]
-    ) == training["tasks"]
-    assert sum(
-        parquet.read_metadata(path).num_rows
-        for path in config["data"]["validation_files"]
-    ) == evaluation["tasks"]
+    for files, expected in (
+        (config["data"]["train_files"], training["tasks"]),
+        (config["data"]["validation_files"], evaluation["tasks"]),
+    ):
+        assert len(files) == len(set(files))
+        rows = [row for path in files for row in parquet.read_table(path).to_pylist()]
+        slots = [row["extra_info"]["slot"] for row in rows]
+        assert len(rows) == expected
+        assert len(set(slots)) == expected
+        assert all(row["data_source"] == "alfworld" for row in rows)
 
 
 def check_public_input():
@@ -293,6 +296,7 @@ def check_evaluator_summary():
         raw_path.write_text("".join(json.dumps(row) + "\n" for row in rows))
         summary = aggregate_panel(raw_path, root / "tasks-0.jsonl")
         assert summary["tasks"] == 2
+        assert summary["unique_tasks"] == 2
         assert summary["success_rate"] == 0.5
         assert summary["transitions"] == 3
         assert summary["valid_action_rate"] == 2 / 3
