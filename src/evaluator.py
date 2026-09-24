@@ -125,6 +125,9 @@ def build_command(
     persistent_rollout = runtime_value(
         config, "persistent_rollout", "PERSISTENT_ROLLOUT"
     )
+    panel_override = "{" + ",".join(
+        f"{name}:{dataset}" for name, dataset in evaluation["panels"].items()
+    ) + "}"
 
     return [
         sys.executable,
@@ -179,7 +182,7 @@ def build_command(
         f"env.history_length={training['history_length']}",
         f"env.max_steps={training['max_steps']}",
         "env.rollout.n=1",
-        f"+env.alfworld.eval_panels={json.dumps(evaluation['panels'], separators=(',', ':'))}",
+        f"+env.alfworld.eval_panels={panel_override}",
         f"+env.alfworld.eval_seed={evaluation['seed']}",
         f"+env.alfworld.no_thinking={str(not generation['enable_thinking']).lower()}",
         "env.resources_per_worker.num_cpus=0.1",
