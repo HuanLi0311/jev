@@ -48,6 +48,14 @@ print(*seeds, sep="\n")
 PY
     )
     mapfile -t suite_seeds <<< "$seed_output"
+    milestone_output=$("$python" - "$config_path" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+print(*yaml.safe_load(Path(sys.argv[1]).read_text())["evaluation"]["milestones"], sep="\n")
+PY
+    )
+    mapfile -t suite_milestones <<< "$milestone_output"
     if [[ $needs_jev == true && ${CHECK_CONFIG_ONLY:-false} != true && -z ${TYPESAFE_API_KEY:-} ]]; then
         read -r -s -p 'Jev API key: ' TYPESAFE_API_KEY
         printf '\n'
@@ -57,6 +65,19 @@ PY
     names=()
     stop_children() {
         ((${#pids[@]} == 0)) || kill "${pids[@]}" 2>/dev/null || true
+    }
+    wait_for_jobs() {
+        local failed=0 job_index
+        for job_index in "${!pids[@]}"; do
+            wait "${pids[$job_index]}" || {
+                printf 'failed job=%s seed=%s suite=%s\n' \
+                    "${names[$job_index]}" "$selected_seed" "$suite_tag" >&2
+                failed=1
+            }
+        done
+        pids=()
+        names=()
+        (( failed == 0 ))
     }
     trap 'stop_children; exit 130' INT
     trap 'stop_children; exit 143' TERM
@@ -74,19 +95,43 @@ PY
             pids+=("$!")
             names+=("$selected_arm")
             if (( ${#pids[@]} == 4 || arm_index == ${#algos[@]} - 1 )); then
-                failed=0
-                for job_index in "${!pids[@]}"; do
-                    wait "${pids[$job_index]}" || {
-                        printf 'failed arm=%s seed=%s suite=%s\n' \
-                            "${names[$job_index]}" "$selected_seed" "$suite_tag" >&2
-                        failed=1
-                    }
-                done
-                pids=()
-                names=()
-                (( failed == 0 )) || exit 1
+                wait_for_jobs || exit 1
             fi
         done
+        if [[ ${CHECK_CONFIG_ONLY:-false} != true ]]; then
+            for milestone in "${suite_milestones[@]}"; do
+                for arm_index in "${!algos[@]}"; do
+                    selected_arm=${algos[$arm_index]}
+                    selected_gpus=${suite_gpus[$((arm_index * 2))]},${suite_gpus[$((arm_index * 2 + 1))]}
+                    run_name=${suite_tag}-${selected_arm}-seed${selected_seed}
+                    run_dir=$project/runs/grpo-alfworld-$run_name
+                    checkpoint=$run_dir/checkpoints/global_step_$milestone
+                    output=$run_dir/evaluations/step_$milestone
+                    if [[ -f $output/summary.json ]]; then
+                        printf 'skipping completed evaluation arm=%s seed=%s step=%s\n' \
+                            "$selected_arm" "$selected_seed" "$milestone"
+                        continue
+                    fi
+                    [[ ! -e $output ]] || {
+                        echo "incomplete evaluation output exists: $output" >&2
+                        exit 2
+                    }
+                    [[ -d $checkpoint/actor ]] || {
+                        echo "actor checkpoint missing: $checkpoint" >&2
+                        exit 2
+                    }
+                    printf 'starting evaluation arm=%s seed=%s step=%s gpus=%s\n' \
+                        "$selected_arm" "$selected_seed" "$milestone" "$selected_gpus"
+                    CUDA_VISIBLE_DEVICES=$selected_gpus \
+                        RAY_TMPDIR=${RAY_TMPDIR:-/dev/shm}/jev-$run_name-eval-$milestone \
+                        "$python" "$project/src/evaluator.py" "$checkpoint" "$output" \
+                            --config "$run_dir/experiment-config.yaml" &
+                    pids+=("$!")
+                    names+=("$selected_arm@step$milestone")
+                done
+                ((${#pids[@]} == 0)) || wait_for_jobs || exit 1
+            done
+        fi
     done
     trap - INT TERM
     exit 0
