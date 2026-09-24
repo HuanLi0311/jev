@@ -124,6 +124,12 @@ shaping_mode=${config_values[11]}
 invalid_action_shaping=${config_values[12]}
 invalid_action_penalty=${config_values[13]}
 [[ -f $model_path/config.json ]] || { echo "model config missing: $model_path" >&2; exit 2; }
+if [[ ${CHECK_CONFIG_ONLY:-false} == true ]]; then
+    printf 'seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s shaping=%s\n' \
+        "$seed" "$train_batch_size" "$rollouts_per_group" "$max_steps" "$updates" \
+        "$eval_panels" "$milestones" "$shaping_mode"
+    exit 0
+fi
 run_dir=$project/runs/grpo-alfworld-$run_tag
 resume_mode=${RESUME_MODE:-disable}
 [[ $resume_mode == disable || $resume_mode == auto || $resume_mode == resume_path ]] || { echo 'invalid RESUME_MODE' >&2; exit 2; }
