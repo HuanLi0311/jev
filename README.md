@@ -138,7 +138,7 @@ for `jev`; there are no version or reward-mode switches:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 MODEL_PATH=/path/to/Qwen2.5-1.5B \
-  ./run_grpo_alfworld.sh jev RUN_TAG
+  ./scripts/run_grpo_alfworld.sh jev RUN_TAG
 ```
 
 For a one-update timing check, additionally set
@@ -190,3 +190,17 @@ first training step took about 14–15 minutes with one validation actor, zero
 DataLoader workers, and four CPU threads; earlier warm launches took about
 16–19 minutes. Shared-node startup varies, and staging the model alone did not
 remove Ray or FSDP initialization cost.
+
+## Next formal comparison
+
+The seed-0, 64-task runs are development evidence. The next confirmatory study
+uses the open-source GRPO, GiGPO, HGPO, and GraphGPO implementations already in
+`verl-agent/` plus the maintained Jev estimator. All primary arms use the same
+Qwen2.5-1.5B-Instruct checkpoint and a common large ALFWorld budget; methods
+without public runnable code are excluded. The frozen algorithm, model,
+benchmark, reward, and repository matrix is in
+[`DESIGN.md`](DESIGN.md#formal-open-source-comparison-plan).
+
+No repository clone is required for the ALFWorld study. WebShop is the first
+cross-benchmark extension: its source is already vendored, but its separate
+Python environment, product data, and search index have not been installed.
