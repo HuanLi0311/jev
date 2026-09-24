@@ -134,26 +134,31 @@ policy improvement requires the later matched GRPO training experiment.
 
 The copied and locally adapted training stack is in [`verl-agent/`](verl-agent/);
 the source tree under `test/dllm/iclr_4/` is not modified. One launcher dispatches
-the five controlled arms to their native trainers:
+the controlled arms to their native trainers. Edit the single `algos=(...)`
+line near the top of the launcher to select the suite, then run:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
-  ./scripts/run_alfworld.sh jev RUN_TAG 1
+  ./scripts/run_alfworld.sh RUN_TAG
 ```
 
-Replace `jev` with `grpo`, `gigpo`, `hgpo`, or `graphgpo` for the other arms.
+For example, `algos=(grpo gigpo jev)` runs only those three arms, sequentially,
+for every seed declared in the YAML. The original single-arm form remains
+available as `./scripts/run_alfworld.sh jev RUN_TAG 1`.
 
 [`config/config.yaml`](config/config.yaml) is the single source of truth for
 the formal scale: 16 task groups per update, eight rollouts per group, 50
-actions, 150 updates, paired seeds 1/2/3, fixed 128-task `valid_seen` and
+actions, 150 updates, the current single fresh seed 1, fixed 128-task `valid_seen` and
 `valid_unseen` panels, checkpoint milestones 0/10/40/80/150, and shared
-optimization/generation settings. The selected seed is applied to the
-environment, dataloader, and vLLM. Invalid-action shaping is disabled for every
-arm and seed 0 is rejected. Validate a selection without creating a run with:
+optimization/generation settings. These include a 512-token response budget,
+PPO mini-batches of 256, thinking/action tags, and temperature-0.4 sampled
+evaluation. The selected seed is applied to the environment, dataloader, and
+vLLM. Invalid-action shaping is disabled for every arm and seed 0 is rejected.
+Validate the selected suite without creating runs with:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 CHECK_CONFIG_ONLY=true \
-  ./scripts/run_alfworld.sh graphgpo check 1
+  ./scripts/run_alfworld.sh check
 ```
 
 The launcher copies the experiment YAML, arm, selected seed, and resolved
@@ -170,7 +175,7 @@ CUDA_VISIBLE_DEVICES=0,1 \
 ```
 
 Use `base` instead of a checkpoint path for update 0. The evaluator fixes seed
-1000, greedy decoding, and both 128-task panels, then writes raw transition
+1000, temperature-0.4 sampling, and both 128-task panels, then writes raw transition
 records, one record per evaluated trajectory, a summary, and a manifest. To run
 a reduced infrastructure check, point `CONFIG_PATH` at a separate YAML instead
 of overriding formal scale values with environment variables.

@@ -299,7 +299,11 @@ shrinking them to the pilot:
 - 16 task groups per update and eight rollouts per group;
 - 50 environment steps per trajectory and history length two;
 - 150 matched updates for every arm;
-- three fresh paired training seeds `[1, 2, 3]`, excluding development seed 0;
+- one fresh paired training seed `[1]` in the current execution stage, excluding
+  development seed 0; this stage does not support multi-seed claims;
+- 512 response tokens, required `<think>...</think><action>...</action>` output,
+  PPO mini-batches of 256, and the shared public-recipe runtime defaults
+  (tensor parallel two, remove-padding on, chunked prefill/eager/free-cache off);
 - deterministic checkpoints at updates 0, 10, 40, 80, and 150;
 - a fixed 128-task `valid_seen` panel and a fixed 128-task `valid_unseen`
   panel, identical across algorithms and training seeds;
@@ -315,18 +319,18 @@ all arms and freeze the new budget before inspecting benchmark outcomes.
 `config/config.yaml` is the single executable source for the common scale,
 paired seeds, shared optimization/generation settings, fixed evaluation panels,
 milestone schedule, and policy revision. `scripts/run_alfworld.sh` consumes it,
-records the resolved selection, rejects seed 0, and dispatches Sparse GRPO,
-Jev-only, GiGPO, HGPO, and GraphGPO to their existing native trainer entrypoints.
-It applies the paired seed to the environment, dataloader, and vLLM and saves
-all declared milestone checkpoints. Do not merge the separate trainers into a
-new framework.
+records the resolved selection, rejects seed 0, and dispatches the algorithms
+selected by its `algos=(...)` suite list to their existing native trainer
+entrypoints. It applies each configured seed to the environment, dataloader,
+and vLLM and saves all declared milestone checkpoints. Do not merge the
+separate trainers into a new framework.
 
 All actor checkpoints are evaluated through `src/evaluator.py`, not through
 recipe-specific validation. The evaluator uses the shared actor checkpoint
-format, greedy decoding, fixed seed 1000, and the same 128-task `valid_seen` and
-`valid_unseen` panels. Each panel is one seed-1000 permutation sampled without
-replacement, must contain 128 unique environment task IDs, and preserves raw
-transitions plus per-task records.
+format, temperature-0.4 sampling with fixed generation seed 1000, and the same
+128-task `valid_seen` and `valid_unseen` panels. Each panel is one seed-1000
+permutation sampled without replacement, must contain 128 unique environment
+task IDs, and preserves raw transitions plus per-task records.
 
 The controlled main table uses binary terminal success with invalid-action
 shaping permanently disabled in the maintained launcher. Jev credit remains
