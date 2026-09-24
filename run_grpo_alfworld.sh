@@ -133,7 +133,7 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     data.train_files="$root/data/verl-agent/text/train.parquet" \
     data.val_files="$root/data/verl-agent/text/test.parquet" \
     data.train_batch_size="$train_batch_size" data.val_batch_size="$val_batch_size" data.shuffle=false \
-    data.dataloader_num_workers=0 \
+    +data.dataloader_num_workers=0 \
     data.max_prompt_length=2048 data.max_response_length=256 \
     data.filter_overlong_prompts=true data.truncation=left data.return_raw_chat=true \
     +data.apply_chat_template_kwargs.enable_thinking=false \
