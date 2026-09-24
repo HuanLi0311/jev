@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
@@ -46,6 +47,12 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError(f"evaluation.panels must be {EXPECTED_PANELS}")
     if config.get("training", {}).get("invalid_action_shaping") is not False:
         raise ValueError("formal comparison requires invalid_action_shaping=false")
+    model_path = Path(config.get("model_path", ""))
+    if not (model_path / "config.json").is_file():
+        raise ValueError(f"model snapshot is unavailable: {model_path}")
+    validation_files = config.get("data", {}).get("validation_files", [])
+    if not validation_files or any(not Path(path).is_file() for path in validation_files):
+        raise ValueError("data.validation_files must contain existing files")
     generation = config.get("generation", {}).get("evaluation", {})
     if generation.get("do_sample") is not False or generation.get("temperature") != 0.0:
         raise ValueError("formal evaluation must use greedy decoding")
@@ -270,6 +277,7 @@ def run() -> None:
     if output.exists() and any(output.iterdir()):
         raise ValueError(f"evaluation output is not empty: {output}")
     output.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(config_path, output / "experiment-config.yaml")
     manifest_path = output / "manifest.json"
     manifest = {
         "status": "running",
