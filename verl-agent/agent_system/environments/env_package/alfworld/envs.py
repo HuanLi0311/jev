@@ -15,9 +15,6 @@
 
 import os
 import sys
-import json
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 import yaml
 import gymnasium as gym
 from gymnasium import spaces
@@ -94,33 +91,6 @@ class AlfworldWorker:
 class AlfworldEnvs(gym.Env):
     def __init__(self, alf_config_path, seed, env_num, group_n, resources_per_worker, is_train=True, env_kwargs={}):
         super().__init__()
-
-        self.jev_weight = float(env_kwargs.get('jev_weight', 0.0)) if is_train else 0.0
-        if self.jev_weight < 0:
-            raise ValueError('jev_weight must be nonnegative')
-        self.jev_reward_mode = env_kwargs.get('jev_reward_mode', 'trajectory_mean')
-        if self.jev_reward_mode not in {'trajectory_mean', 'step_advantage', 'hindsight_step_advantage', 'hindsight_group_advantage', 'hindsight_step_only_advantage'}:
-            raise ValueError('invalid jev_reward_mode')
-        # Hindsight scoring runs once the complete trajectory and verifier
-        # outcome exist, so this environment must not query Jev per transition.
-        self.jev_enabled = self.jev_weight > 0 and not self.jev_reward_mode.startswith('hindsight_')
-        if self.jev_enabled:
-            from score_jev_v1 import online_alfworld_transition, parse_effect_response, query, RUBRIC_VERSION
-            self.jev_transition = online_alfworld_transition
-            self.jev_query = query
-            self.jev_effect = parse_effect_response
-            self.jev_rubric_version = RUBRIC_VERSION
-            self.jev_key = os.environ.get('TYPESAFE_API_KEY')
-            if not self.jev_key:
-                raise ValueError('TYPESAFE_API_KEY is required for the Jev training arm')
-            log_path = env_kwargs.get('jev_log_path')
-            if not log_path:
-                raise ValueError('jev_log_path is required for the Jev training arm')
-            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-            # ponytail: fresh runs are protected by the launcher; append lets a
-            # checkpoint resume preserve earlier online annotations.
-            self.jev_log = open(log_path, 'a', encoding='utf-8')
-            self.jev_rollout = -1
         
         # Initialize Ray if not already initialized
         if not ray.is_initialized():
@@ -172,52 +142,6 @@ class AlfworldEnvs(gym.Env):
             self.prev_admissible_commands[i] = info['admissible_commands']
             rewards_list.append(compute_reward(info, self.multi_modal))
 
-        if self.jev_enabled:
-            active = [i for i in range(self.num_processes) if not self.jev_done[i]]
-            states = [
-                self.jev_transition(self.jev_tasks[i], self.jev_history[i],
-                                    self.jev_obs[i], actions[i], text_obs_list[i])
-                for i in active
-            ]
-            # ponytail: four concurrent calls cap API pressure; raise only after rate-limit testing.
-            responses = []
-            if active:
-                with ThreadPoolExecutor(max_workers=min(4, len(active))) as pool:
-                    responses = list(pool.map(lambda state: self.jev_query(self.jev_key, state), states))
-            for i, state, response in zip(active, states, responses):
-                if response.get('model') != 'jev-1.13.0':
-                    raise ValueError(f"Jev model changed: {response.get('model')}")
-                jev_score, jev_confidence = self.jev_effect(response)
-                jev_reward = jev_confidence * (2 * jev_score - 1)
-                previous_count = len(self.jev_history[i])
-                previous_mean = self.jev_sum[i] / previous_count if previous_count else 0.0
-                self.jev_sum[i] += jev_reward
-                # ponytail: mean increments telescope, so long failed traces are not rewarded just for length.
-                jev_increment = self.jev_sum[i] / (previous_count + 1) - previous_mean
-                baseline_reward = rewards_list[i]
-                if self.jev_reward_mode == 'trajectory_mean':
-                    rewards_list[i] += self.jev_weight * jev_increment
-                else:
-                    # Preserve Jev's native continuous score and confidence; the
-                    # step estimator combines them without group standardization.
-                    info_list[i]['jev_effect_score'] = jev_score
-                    info_list[i]['jev_confidence'] = jev_confidence
-                self.jev_log.write(json.dumps({
-                    'rollout': self.jev_rollout, 'env_index': i,
-                    'step_index': len(self.jev_history[i]),
-                    'rubric_version': self.jev_rubric_version,
-                    'request_state': state, 'response': response,
-                    'reward_mode': self.jev_reward_mode,
-                    'baseline_reward': baseline_reward,
-                    'jev_score': jev_score, 'jev_confidence': jev_confidence,
-                    'jev_reward': jev_reward, 'jev_aggregate_increment': jev_increment,
-                    'combined_reward': rewards_list[i],
-                }, ensure_ascii=False) + '\n')
-                self.jev_history[i].append({'action': actions[i], 'result': text_obs_list[i]})
-            self.jev_log.flush()
-            self.jev_obs = text_obs_list
-            self.jev_done = [bool(previous or done) for previous, done in zip(self.jev_done, dones_list)]
-
         if self.multi_modal:
             image_obs_list = self.getobs()
         else:
@@ -247,19 +171,6 @@ class AlfworldEnvs(gym.Env):
             text_obs_list.append(obs[0])
             self.prev_admissible_commands[i] = info['admissible_commands']
             info_list.append(info)
-
-        if self.jev_enabled:
-            self.jev_rollout += 1
-            self.jev_obs = text_obs_list
-            self.jev_tasks = []
-            for observation in text_obs_list:
-                marker = 'Your task is to: '
-                if marker not in observation:
-                    raise ValueError('ALFWorld task missing from public observation')
-                self.jev_tasks.append(observation.split(marker, 1)[1].strip())
-            self.jev_history = [[] for _ in text_obs_list]
-            self.jev_sum = [0.0 for _ in text_obs_list]
-            self.jev_done = [False for _ in text_obs_list]
 
         if self.multi_modal:
             image_obs_list = self.getobs()
@@ -296,8 +207,6 @@ class AlfworldEnvs(gym.Env):
         # Kill all Ray actors
         for worker in self.workers:
             ray.kill(worker)
-        if self.jev_enabled:
-            self.jev_log.close()
 
 def build_alfworld_envs(alf_config_path, seed, env_num, group_n, resources_per_worker, is_train=True, env_kwargs={}):
     return AlfworldEnvs(alf_config_path, seed, env_num, group_n, resources_per_worker, is_train, env_kwargs)

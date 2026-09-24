@@ -199,13 +199,13 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                 )
             else:
                 obs = ALFWORLD_TEMPLATE.format(
-                        task_description=self.tasks[i],
+                    task_description=self.tasks[i],
                     step_count=len(self.memory[i]),
                     history_length=valid_lens[i],
                     action_history=memory_contexts[i],
                     current_step=len(self.memory[i]) + 1,
                     current_observation=text_obs[i],
-                        admissible_actions=reformatted_admissible_actions
+                    admissible_actions=reformatted_admissible_actions
                 )
 
             if self.config.env.alfworld.get('no_thinking', False):
@@ -642,9 +642,6 @@ def make_envs(config):
 
         env_kwargs = {
             'eval_dataset': config.env.alfworld.eval_dataset, # 'eval_in_distribution' or 'eval_out_of_distribution'
-            'jev_weight': config.env.alfworld.get('jev_weight', 0.0),
-            'jev_reward_mode': config.env.alfworld.get('jev_reward_mode', 'trajectory_mean'),
-            'jev_log_path': config.env.alfworld.get('jev_log_path'),
         }
         _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
         _val_envs = build_alfworld_envs(alf_config_path, config.env.seed + 1000, config.data.val_batch_size, 1, is_train=False, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)

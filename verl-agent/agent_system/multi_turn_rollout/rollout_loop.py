@@ -299,14 +299,14 @@ class TrajectoryCollector:
             gen_batch: DataProto, 
             actor_rollout_wg, 
             envs: EnvironmentManagerBase,
-            hindsight_jev: bool = False,
+            jev_process_reward: bool = False,
             ) -> DataProto:
         if not self.config.actor_rollout_ref.rollout.get('persistent_across_turns', False):
-            return self._vanilla_multi_turn_loop(gen_batch, actor_rollout_wg, envs, hindsight_jev)
+            return self._vanilla_multi_turn_loop(gen_batch, actor_rollout_wg, envs, jev_process_reward)
         # ponytail: one weight sync for the entire rollout; training starts after end_rollout.
         try:
             actor_rollout_wg.begin_rollout()
-            return self._vanilla_multi_turn_loop(gen_batch, actor_rollout_wg, envs, hindsight_jev)
+            return self._vanilla_multi_turn_loop(gen_batch, actor_rollout_wg, envs, jev_process_reward)
         finally:
             actor_rollout_wg.end_rollout()
 
@@ -315,7 +315,7 @@ class TrajectoryCollector:
             gen_batch: DataProto,
             actor_rollout_wg,
             envs: EnvironmentManagerBase,
-            hindsight_jev: bool = False,
+            jev_process_reward: bool = False,
             ) -> DataProto:
         """
         Collects trajectories through parallel agent-environment agent_loop.
@@ -450,17 +450,15 @@ class TrajectoryCollector:
                     episode_lengths=episode_lengths,
                     )
 
-        if hindsight_jev and self.config.env.alfworld.get('jev_reward_mode') in {
-                'hindsight_step_advantage', 'hindsight_group_advantage',
-                'hindsight_step_only_advantage'}:
-            self._annotate_hindsight_jev(
+        if jev_process_reward:
+            self._annotate_jev_process_rewards(
                 envs, total_batch_list, total_infos, episode_rewards,
                 success, traj_uid,
             )
         
         return total_batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings
 
-    def _annotate_hindsight_jev(
+    def _annotate_jev_process_rewards(
             self, envs, total_batch_list, total_infos,
             episode_rewards, success, traj_uid):
         """Attach outcome-conditioned Jev q/confidence after rollout completion."""
@@ -468,20 +466,14 @@ class TrajectoryCollector:
         import os
         from concurrent.futures import ThreadPoolExecutor
         from pathlib import Path
-        reward_mode = self.config.env.alfworld.get('jev_reward_mode')
-        if reward_mode == 'hindsight_group_advantage':
-            from score_jev_v3 import score_completed_trajectory
-        elif reward_mode == 'hindsight_step_only_advantage':
-            from score_jev_v4 import score_completed_trajectory
-        else:
-            from score_jev_v2 import score_completed_trajectory
+        from score_jev import score_completed_trajectory
 
         key = os.environ.get('TYPESAFE_API_KEY')
         if not key:
-            raise ValueError('TYPESAFE_API_KEY is required for hindsight Jev')
+            raise ValueError('TYPESAFE_API_KEY is required for Jev process rewards')
         log_path = self.config.env.alfworld.get('jev_log_path')
         if not log_path:
-            raise ValueError('jev_log_path is required for hindsight Jev')
+            raise ValueError('jev_log_path is required for Jev process rewards')
 
         trajectories = []
         active_rows = []
@@ -523,7 +515,7 @@ class TrajectoryCollector:
         with open(log_path, 'a', encoding='utf-8') as sink:
             for batch_index, (record, rows) in enumerate(zip(records, active_rows, strict=True)):
                 if len(record['step_credit']) != len(rows):
-                    raise ValueError('hindsight Jev step count does not match rollout')
+                    raise ValueError('Jev step count does not match rollout')
                 for row, credit in zip(rows, record['step_credit'], strict=True):
                     row['jev_effect_scores'] = np.float32(credit['jev_score'])
                     row['jev_confidences'] = np.float32(credit['jev_confidence'])
@@ -573,7 +565,7 @@ class TrajectoryCollector:
                 gen_batch=gen_batch,
                 actor_rollout_wg=actor_rollout_wg,
                 envs=envs,
-                hindsight_jev=True,
+                jev_process_reward=self.config.env.alfworld.get('jev_process_reward', False),
             )
             batch_list, episode_rewards, episode_lengths, success, traj_uid, tool_callings = filter_group_data(batch_list=batch_list, 
                                                                                                 episode_rewards=episode_rewards, 
@@ -638,7 +630,9 @@ class TrajectoryCollector:
                 gen_batch=gen_batch,
                 actor_rollout_wg=actor_rollout_wg,
                 envs=envs,
-                hindsight_jev=is_train,
+                jev_process_reward=(
+                    is_train and self.config.env.alfworld.get('jev_process_reward', False)
+                ),
             )
         assert len(total_batch_list) == len(total_episode_rewards)
         assert len(total_batch_list) == len(total_episode_lengths)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""V2: assign per-step Jev credit after a trajectory and outcome are known.
+"""Assign per-step Jev credit after a trajectory and outcome are known.
 
 Input is one normalized completed trajectory per JSONL line.  Only whitelisted
 public transition fields and the explicit verifier outcome are sent to Jev.
@@ -18,11 +18,30 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
-from score_jev_v1 import ENDPOINT, parse_effect_response, task_success_criteria
-
-
-RUBRIC_VERSION = "jev_hindsight_transition_v1"
+ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+RUBRIC_VERSION = "jev_hindsight_process_v1"
 EXPECTED_MODEL = "jev-1.13.0"
+
+
+def task_success_criteria(task):
+    return (
+        "Success iff the final environment state satisfies every requirement in "
+        f"the following task; partial completion is not success: {task}"
+    )
+
+
+def parse_effect_response(response):
+    effect = response["answers"]["effect"]
+    values = {}
+    for name in ("score", "confidence"):
+        raw = effect[name]
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise ValueError(f"Jev {name} must be numeric")
+        value = float(raw)
+        if not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError(f"Jev {name} outside [0, 1]")
+        values[name] = value
+    return values["score"], values["confidence"]
 
 
 def _text(value, name):
