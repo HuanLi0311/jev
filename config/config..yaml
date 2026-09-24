@@ -1,7 +1,4 @@
-version: 1
-
-policy:
-  model_path: /home/JJ_Group/lih2511/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+model_path: /home/JJ_Group/lih2511/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306
 
 # These are prompt placeholders; ALFWorld supplies the actual tasks on reset.
 # Repeating the installed 8/64-row files makes one 16/128-row batch without

@@ -31,8 +31,8 @@ import yaml
 
 path, selected_seed, selected_mode = sys.argv[1:]
 config = yaml.safe_load(Path(path).read_text())
-if not isinstance(config, dict) or config.get("version") != 1:
-    raise SystemExit("config version must be 1")
+if not isinstance(config, dict):
+    raise SystemExit("config must be a mapping")
 
 def positive(section, key):
     value = section.get(key)
@@ -94,9 +94,9 @@ coefficient = shaping.get("coefficient")
 if type(coefficient) not in (int, float) or coefficient < 0:
     raise SystemExit("invalid-action shaping coefficient must be nonnegative")
 
-model_path = config.get("policy", {}).get("model_path")
+model_path = config.get("model_path")
 if not isinstance(model_path, str) or not model_path.startswith("/"):
-    raise SystemExit("policy.model_path must be absolute")
+    raise SystemExit("model_path must be absolute")
 data = config.get("data", {})
 train_files = data.get("train_files")
 validation_files = data.get("validation_files")
