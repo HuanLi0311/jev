@@ -352,6 +352,7 @@ def run() -> None:
             "RAY_TMPDIR": environment.get("RAY_TMPDIR", "/dev/shm"),
         }
     )
+    Path(environment["RAY_TMPDIR"]).mkdir(parents=True, exist_ok=True)
     try:
         with (output / "evaluation.log").open("x", encoding="utf-8") as log:
             subprocess.run(
