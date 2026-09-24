@@ -1,7 +1,52 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage='usage: run_alfworld.sh grpo|jev|gigpo|hgpo|graphgpo RUN_TAG SEED'
+# Edit this one list to select the arms in a suite run.
+algos=(grpo jev gigpo hgpo graphgpo)
+
+root=/home/JJ_Group/lih2511
+project=$root/test/jev
+repo=$project/verl-agent
+python=$root/.conda/envs/verl/bin/python
+config_path=${CONFIG_PATH:-$project/config/config.yaml}
+[[ -f $config_path ]] || { echo "config missing: $config_path" >&2; exit 2; }
+
+suite_usage='usage: run_alfworld.sh RUN_TAG'
+if (( $# == 1 )); then
+    suite_tag=$1
+    [[ $suite_tag =~ ^[a-zA-Z0-9_-]+$ ]] || { echo 'invalid run tag' >&2; exit 2; }
+    for selected_arm in "${algos[@]}"; do
+        case $selected_arm in
+            grpo|jev|gigpo|hgpo|graphgpo) ;;
+            *) echo "invalid suite algorithm: $selected_arm" >&2; exit 2 ;;
+        esac
+    done
+    seed_output=$("$python" - "$config_path" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+config = yaml.safe_load(Path(sys.argv[1]).read_text())
+seeds = config.get("training", {}).get("paired_seeds") if isinstance(config, dict) else None
+if not isinstance(seeds, list) or not seeds or len(seeds) != len(set(seeds)):
+    raise SystemExit("training.paired_seeds must contain distinct seeds")
+if any(type(seed) is not int or seed <= 0 for seed in seeds):
+    raise SystemExit("training.paired_seeds must contain positive integers and exclude seed 0")
+print(*seeds, sep="\n")
+PY
+    )
+    mapfile -t suite_seeds <<< "$seed_output"
+    for selected_seed in "${suite_seeds[@]}"; do
+        for selected_arm in "${algos[@]}"; do
+            printf 'starting arm=%s seed=%s suite=%s\n' "$selected_arm" "$selected_seed" "$suite_tag"
+            "$0" "$selected_arm" "${suite_tag}-${selected_arm}-seed${selected_seed}" "$selected_seed"
+        done
+    done
+    exit 0
+fi
+
+usage="usage: run_alfworld.sh grpo|jev|gigpo|hgpo|graphgpo RUN_TAG SEED; or $suite_usage"
 arm=${1:?$usage}
 run_tag=${2:?$usage}
 seed=${3:?$usage}
@@ -18,13 +63,6 @@ IFS=, read -r -a cuda_devices <<< "$CUDA_VISIBLE_DEVICES"
 gpu_count=${#cuda_devices[@]}
 (( gpu_count == 2 || gpu_count == 4 )) || { echo 'use exactly two or four GPUs' >&2; exit 2; }
 [[ $(printf '%s\n' "${cuda_devices[@]}" | sort -u | wc -l) -eq $gpu_count ]] || { echo 'GPU indices must be unique' >&2; exit 2; }
-
-root=/home/JJ_Group/lih2511
-project=$root/test/jev
-repo=$project/verl-agent
-python=$root/.conda/envs/verl/bin/python
-config_path=${CONFIG_PATH:-$project/config/config.yaml}
-[[ -f $config_path ]] || { echo "config missing: $config_path" >&2; exit 2; }
 
 config_output=$(
     "$python" - "$config_path" "$seed" <<'PY'
@@ -184,8 +222,8 @@ for name, section in (("train", train_generation), ("evaluation", eval_generatio
     if type(section.get("top_k")) is not int:
         raise SystemExit(f"generation.{name}.top_k must be an integer")
     boolean(section, "do_sample")
-if eval_generation["do_sample"]:
-    raise SystemExit("formal evaluation must be greedy")
+if eval_generation["do_sample"] and eval_generation["temperature"] <= 0:
+    raise SystemExit("sampled evaluation requires positive temperature")
 
 runtime = config.get("runtime", {})
 for key in (
