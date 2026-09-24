@@ -1,4 +1,4 @@
-#   python -m pip install -e ./verl-agent --no-deps
+# python -m pip install -e ./verl-agent --no-deps
 # The maintained launcher also prepends ./verl-agent to PYTHONPATH.
 
 accelerate==1.14.0
