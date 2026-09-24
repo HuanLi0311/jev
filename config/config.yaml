@@ -17,14 +17,14 @@ training:
   max_steps: 50
   history_length: 2
   updates: 150
-  paired_seeds: [1, 2, 3]
+  paired_seeds: [1]
   invalid_action_shaping: false
 
 # Shared policy-update settings for every controlled arm. Method-specific
 # credit-assignment parameters stay under methods below.
 optimization:
   learning_rate: 0.000001
-  ppo_mini_batch_size: 16
+  ppo_mini_batch_size: 256
   use_kl_loss: true
   use_kl_in_reward: false
   kl_loss_coef: 0.01
@@ -32,18 +32,18 @@ optimization:
 
 generation:
   max_prompt_length: 2048
-  max_response_length: 256
-  enable_thinking: false
+  max_response_length: 512
+  enable_thinking: true
   train:
     temperature: 1.0
     top_p: 1.0
     top_k: -1
     do_sample: true
   evaluation:
-    temperature: 0.0
+    temperature: 0.4
     top_p: 1.0
     top_k: -1
-    do_sample: false
+    do_sample: true
 
 # These defaults affect memory and throughput, not the learning objective.
 # Environment overrides remain available for hardware calibration and are
@@ -55,15 +55,15 @@ runtime:
   reference_parameter_offload: true
   persistent_rollout: false
   rollout_gpu_memory_utilization: 0.40
-  tensor_model_parallel_size: 1
+  tensor_model_parallel_size: 2
   ray_num_cpus: 32
-  use_remove_padding: false
+  use_remove_padding: true
   use_torch_compile: false
   gradient_checkpointing: true
   actor_parameter_offload: false
-  enforce_eager: true
-  enable_chunked_prefill: true
-  free_cache_engine: true
+  enforce_eager: false
+  enable_chunked_prefill: false
+  free_cache_engine: false
 
 methods:
   grpo:
