@@ -87,7 +87,7 @@ persistent_rollout=${PERSISTENT_ROLLOUT:-false}
 stdlib_shm=${STDLIB_SHM:-false}
 [[ $stdlib_shm == true || $stdlib_shm == false ]] || { echo 'STDLIB_SHM must be true or false' >&2; exit 2; }
 if [[ $stdlib_shm == true ]]; then
-    # ponytail: Ray workers import 41 MB of stdlib from tmpfs, avoiding flaky NFS reads.
+    # ponytail: tmpfs cache assumes an immutable conda env; delete it after Python upgrades.
     stdlib_cache=/dev/shm/jev-python-stdlib
     flock /dev/shm/jev-python-stdlib.lock bash -e -c '
         if [[ ! -f "$2/.complete" ]]; then
