@@ -1,6 +1,6 @@
 # Jev as a process judge on agent trajectories
 
-Research date: 2026-09-19; updated 2026-09-24
+Research date: 2026-09-19; updated 2026-09-25
 
 ## Question
 
@@ -324,7 +324,9 @@ selected by its `algos=(...)` suite list to their existing native trainer
 entrypoints. On the eight-GPU H200 host, a suite assigns two GPUs to each arm
 and runs up to four arms concurrently. It applies each configured seed to the
 environment, dataloader, and vLLM and saves all declared milestone checkpoints.
-Do not merge the separate trainers into a new framework.
+Each checkpoint retains the actor training state and dataloader state needed to
+resume. Do not merge the separate trainers into a new framework; they share
+only the artifact writer and record schema.
 
 All actor checkpoints are evaluated through `src/evaluator.py`, not through
 recipe-specific validation. The evaluator uses the shared actor checkpoint
@@ -332,6 +334,17 @@ format, temperature-0.4 sampling with fixed generation seed 1000, and the same
 128-task `valid_seen` and `valid_unseen` panels. Each panel is one seed-1000
 permutation sampled without replacement, must contain 128 unique environment
 task IDs, and preserves raw transitions plus per-task records.
+
+After training, the suite evaluates every declared milestone, with the same
+four two-GPU arm pairs running concurrently. A run directory contains the
+frozen config and resolved runtime, `train.log`, numeric update records in
+`metrics.jsonl`, one transition JSONL per update under `rollouts/`, all declared
+`checkpoints/global_step_N/`, and `evaluations/step_N/` with an evaluation log,
+manifest, summary, raw panel transitions, and per-task records. Jev additionally
+keeps raw judge requests/responses, latency, token usage, and turn credit in
+`jev-process.jsonl`. Transition records retain observations, actions, observed
+results, validity, outcome, rewards/advantages, and a `padding_duplicate` flag
+so batch-padding copies can be excluded from analyses without deleting them.
 
 The controlled main table uses binary terminal success with invalid-action
 shaping permanently disabled in the maintained launcher. Jev credit remains
