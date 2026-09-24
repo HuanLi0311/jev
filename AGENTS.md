@@ -14,6 +14,6 @@
   `config/config.yaml`; do not duplicate them in launchers. Invalid-action
   shaping is disabled in the maintained launcher.
 - The paper source is `assets/paper/main.tex`; offline utilities are under
-  `offline/`, and the maintained Jev scorer is `src/score_jev.py`.
+  `offline/`, and the maintained Jev scorer is `src/score.py`.
 - Launch online runs through `scripts/run_alfworld.sh` and preserve exact
   configs, per-task evaluation records, and raw judge responses.

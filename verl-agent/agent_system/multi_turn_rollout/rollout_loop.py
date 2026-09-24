@@ -475,7 +475,7 @@ class TrajectoryCollector:
         import os
         from concurrent.futures import ThreadPoolExecutor
         from pathlib import Path
-        from score_jev import score_completed_trajectory
+        from score import score_completed_trajectory
 
         key = os.environ.get('TYPESAFE_API_KEY')
         if not key:

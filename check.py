@@ -21,7 +21,7 @@ from agent_system.environments.env_manager import AlfWorldEnvironmentManager
 from agent_system.environments.env_package.alfworld.envs import worker_seed_and_offset
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
-from score_jev import public_completed_trajectory, questions_for_steps
+from score import public_completed_trajectory, questions_for_steps
 from verl.trainer.ppo.artifact_utils import dump_training_transitions
 from verl.trainer.ppo.core_algos import compute_jev_step_grpo_advantage
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
@@ -233,7 +233,7 @@ def check_post_episode_annotation():
             }
 
         with patch.dict(os.environ, {"TYPESAFE_API_KEY": "test-only"}), patch(
-            "score_jev.score_completed_trajectory", side_effect=fake_score
+            "score.score_completed_trajectory", side_effect=fake_score
         ):
             collector._annotate_jev_process_rewards(
                 SimpleNamespace(tasks=["put apple in fridge"]),
