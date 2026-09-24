@@ -312,7 +312,7 @@ five-update GRPO/Jev pair. These are infrastructure and cost checks, not model
 selection. If the measured budget must be reduced, reduce it identically for
 all arms and freeze the new budget before inspecting benchmark outcomes.
 
-`config/config..yaml` is the single executable source for the common scale,
+`config/config.yaml` is the single executable source for the common scale,
 paired seeds, fixed evaluation panels, milestone schedule, policy revision,
 and invalid-action ablation. The GRPO/Jev launcher consumes it without local
 scale defaults, records it in each run directory, rejects seed 0, and evaluates

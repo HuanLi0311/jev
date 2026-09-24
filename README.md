@@ -142,7 +142,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 \
   ./scripts/run_grpo_alfworld.sh jev RUN_TAG 1 off
 ```
 
-[`config/config..yaml`](config/config..yaml) is the single source of truth for
+[`config/config.yaml`](config/config.yaml) is the single source of truth for
 the formal scale: 16 task groups per update, eight rollouts per group, 50
 actions, 150 updates, paired seeds 1/2/3, fixed 128-task `valid_seen` and
 `valid_unseen` panels, and checkpoint/evaluation milestones 0/10/40/80/150.

@@ -18,7 +18,7 @@ root=/home/JJ_Group/lih2511
 project=$root/test/jev
 repo=$project/verl-agent
 python=$root/.conda/envs/verl/bin/python
-config_path=${CONFIG_PATH:-$project/config/config..yaml}
+config_path=${CONFIG_PATH:-$project/config/config.yaml}
 [[ -f $config_path ]] || { echo "config missing: $config_path" >&2; exit 2; }
 
 config_output=$(
