@@ -18,6 +18,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from evaluator import aggregate_panel
 from agent_system.environments.env_manager import AlfWorldEnvironmentManager
+from agent_system.environments.env_package.alfworld.envs import worker_seed_and_offset
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
 from score_jev import public_completed_trajectory, questions_for_steps
@@ -67,6 +68,15 @@ def check_formal_config():
         assert len(rows) == expected
         assert len(set(slots)) == expected
         assert all(row["data_source"] == "alfworld" for row in rows)
+
+
+def check_eval_task_assignment():
+    assert [worker_seed_and_offset(1000, i, False) for i in range(128)] == [
+        (1000, i) for i in range(128)
+    ]
+    assert [worker_seed_and_offset(1, i, True) for i in range(16)] == [
+        (1 + i, 0) for i in range(16)
+    ]
 
 
 def check_public_input():
@@ -304,6 +314,7 @@ def check_evaluator_summary():
 
 def main():
     check_formal_config()
+    check_eval_task_assignment()
     check_public_input()
     check_action_format()
     check_advantage()

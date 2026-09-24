@@ -58,6 +58,11 @@ def compute_reward(info, multi_modal=False):
         reward = 10.0 * float(info['won'])
     return reward
 
+
+def worker_seed_and_offset(seed, task_index, is_train):
+    return (seed + task_index, 0) if is_train else (seed, task_index)
+
+
 class AlfworldWorker:
     """
     Ray remote actor that replaces the worker function.
@@ -117,8 +122,7 @@ class AlfworldEnvs(gym.Env):
         for i in range(self.num_processes):
             task_index = i // self.group_n
             # Evaluation uses one permutation and distinct task offsets.
-            worker_seed = seed + task_index if is_train else seed
-            game_offset = 0 if is_train else task_index
+            worker_seed, game_offset = worker_seed_and_offset(seed, task_index, is_train)
             worker = env_worker.remote(config, worker_seed, base_env, game_offset)
             self.workers.append(worker)
 
