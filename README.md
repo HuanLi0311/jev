@@ -9,8 +9,8 @@
 git clone https://github.com/HuanLi0311/jev.git
 cd jev
 
-conda create -n jev python=3.10.20 -y
-conda activate jev
+conda create -n rl python=3.10.20 -y
+conda activate rl
 
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
@@ -28,7 +28,7 @@ ALFWorld 默认下载到当前用户的 `~/.cache/alfworld`。如需共享缓存
 Hugging Face 离线模式，因此需要提前下载：
 
 ```bash
-conda activate jev
+conda activate rl
 cd jev
 
 MODEL_SNAPSHOT=$(hf download Qwen/Qwen2.5-1.5B-Instruct \
@@ -50,13 +50,12 @@ python check.py
 
 ```bash
 algos=(grpo jev gigpo graphgpo)
-# 全部五种方法：algos=(grpo jev gigpo hgpo graphgpo)
-```
+
 
 正式运行前先验证配置和调度，不会启动训练：
 
 ```bash
-conda activate jev
+conda activate rl
 cd jev
 
 CHECK_CONFIG_ONLY=true CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
@@ -82,3 +81,6 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
 CUDA_VISIBLE_DEVICES=0,1 \
   scripts/run_alfworld.sh grpo smoke-grpo-seed1 1
 ```
+
+## jev_key
+apikey_21227c7f4b1ca01f4de0bc45ad653eb6f2c0_719e7e9ddb4ea7ab4d059165d7b0924c7d3a73f5d452408abbb6835cc0492b33
