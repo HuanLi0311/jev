@@ -25,6 +25,8 @@ from verl.workers.fsdp_workers import ActorRolloutRefWorker
 
 
 def check_formal_config():
+    import pyarrow.parquet as parquet
+
     config = yaml.safe_load(
         (Path(__file__).resolve().parent / "config" / "config..yaml").read_text()
     )
@@ -49,6 +51,13 @@ def check_formal_config():
         "off": False,
         "on": True,
     }
+    assert sum(
+        parquet.read_metadata(path).num_rows for path in config["data"]["train_files"]
+    ) == 16
+    assert sum(
+        parquet.read_metadata(path).num_rows
+        for path in config["data"]["validation_files"]
+    ) == 128
 
 
 def check_public_input():

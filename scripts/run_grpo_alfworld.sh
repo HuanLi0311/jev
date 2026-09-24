@@ -97,9 +97,16 @@ if type(coefficient) not in (int, float) or coefficient < 0:
 model_path = config.get("policy", {}).get("model_path")
 if not isinstance(model_path, str) or not model_path.startswith("/"):
     raise SystemExit("policy.model_path must be absolute")
+data = config.get("data", {})
+train_files = data.get("train_files")
+validation_files = data.get("validation_files")
+for name, paths in (("train_files", train_files), ("validation_files", validation_files)):
+    if not isinstance(paths, list) or not paths or any(not Path(item).is_file() for item in paths):
+        raise SystemExit(f"data.{name} must contain existing files")
 
 values = [
-    model_path, groups, rollouts, max_steps, history_length, updates,
+    model_path, json.dumps(train_files), json.dumps(validation_files),
+    groups, rollouts, max_steps, history_length, updates,
     panel_size, eval_seed, json.dumps(panels, separators=(",", ":")),
     json.dumps(milestones, separators=(",", ":")), len(milestones),
     selected_mode, str(modes[selected_mode]).lower(), coefficient,
@@ -108,21 +115,23 @@ print("\n".join(map(str, values)))
 PY
 )
 mapfile -t config_values <<< "$config_output"
-(( ${#config_values[@]} == 14 )) || { echo 'config parser returned incomplete data' >&2; exit 2; }
+(( ${#config_values[@]} == 16 )) || { echo 'config parser returned incomplete data' >&2; exit 2; }
 model_path=${config_values[0]}
-train_batch_size=${config_values[1]}
-rollouts_per_group=${config_values[2]}
-max_steps=${config_values[3]}
-history_length=${config_values[4]}
-updates=${config_values[5]}
-val_batch_size=${config_values[6]}
-eval_seed=${config_values[7]}
-eval_panels=${config_values[8]}
-milestones=${config_values[9]}
-milestone_count=${config_values[10]}
-shaping_mode=${config_values[11]}
-invalid_action_shaping=${config_values[12]}
-invalid_action_penalty=${config_values[13]}
+train_files=${config_values[1]}
+validation_files=${config_values[2]}
+train_batch_size=${config_values[3]}
+rollouts_per_group=${config_values[4]}
+max_steps=${config_values[5]}
+history_length=${config_values[6]}
+updates=${config_values[7]}
+val_batch_size=${config_values[8]}
+eval_seed=${config_values[9]}
+eval_panels=${config_values[10]}
+milestones=${config_values[11]}
+milestone_count=${config_values[12]}
+shaping_mode=${config_values[13]}
+invalid_action_shaping=${config_values[14]}
+invalid_action_penalty=${config_values[15]}
 [[ -f $model_path/config.json ]] || { echo "model config missing: $model_path" >&2; exit 2; }
 if [[ ${CHECK_CONFIG_ONLY:-false} == true ]]; then
     printf 'seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s shaping=%s\n' \
@@ -223,8 +232,7 @@ ray_num_cpus=${RAY_NUM_CPUS:-32}
 cd "$repo"
 exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.main_ppo \
     algorithm.adv_estimator="$adv_estimator" +algorithm.grpo_cross_steps=false \
-    data.train_files="$root/data/verl-agent/text/train.parquet" \
-    data.val_files="$root/data/verl-agent/text/test.parquet" \
+    data.train_files="$train_files" data.val_files="$validation_files" \
     data.train_batch_size="$train_batch_size" data.val_batch_size="$val_batch_size" data.shuffle=false \
     +data.dataloader_num_workers=0 \
     data.max_prompt_length=2048 data.max_response_length=256 \

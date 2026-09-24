@@ -3,6 +3,17 @@ version: 1
 policy:
   model_path: /home/JJ_Group/lih2511/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306
 
+# These are prompt placeholders; ALFWorld supplies the actual tasks on reset.
+# Repeating the installed 8/64-row files makes one 16/128-row batch without
+# copying or mutating the shared source files.
+data:
+  train_files:
+    - /home/JJ_Group/lih2511/data/verl-agent/text/train.parquet
+    - /home/JJ_Group/lih2511/data/verl-agent/text/train.parquet
+  validation_files:
+    - /home/JJ_Group/lih2511/data/verl-agent/text/test.parquet
+    - /home/JJ_Group/lih2511/data/verl-agent/text/test.parquet
+
 training:
   task_groups_per_update: 16
   rollouts_per_group: 8
