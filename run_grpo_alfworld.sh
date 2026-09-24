@@ -136,12 +136,14 @@ eval_split=${EVAL_SPLIT:-eval_in_distribution}
 [[ $eval_split == eval_in_distribution || $eval_split == eval_out_of_distribution ]] || { echo 'invalid EVAL_SPLIT' >&2; exit 2; }
 
 cd "$repo"
+# ponytail: 8/64 local prompts need no loader pool; revisit for much larger datasets.
 exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.main_ppo \
     algorithm.adv_estimator="$adv_estimator" +algorithm.grpo_cross_steps=false \
     algorithm.jev_step.verifier_weight="$jev_verifier_weight" \
     data.train_files="$root/data/verl-agent/text/train.parquet" \
     data.val_files="$root/data/verl-agent/text/test.parquet" \
     data.train_batch_size="$train_batch_size" data.val_batch_size="$val_batch_size" data.shuffle=false \
+    data.dataloader_num_workers=0 \
     data.max_prompt_length=2048 data.max_response_length=256 \
     data.filter_overlong_prompts=true data.truncation=left data.return_raw_chat=true \
     +data.apply_chat_template_kwargs.enable_thinking=false \
