@@ -313,8 +313,8 @@ selection. If the measured budget must be reduced, reduce it identically for
 all arms and freeze the new budget before inspecting benchmark outcomes.
 
 `config/config.yaml` is the single executable source for the common scale,
-paired seeds, fixed evaluation panels, milestone schedule, policy revision,
-and invalid-action ablation. The GRPO/Jev launcher consumes it without local
+paired seeds, fixed evaluation panels, milestone schedule, and policy revision.
+The GRPO/Jev launcher consumes it without local
 scale defaults, records it in each run directory, rejects seed 0, and evaluates
 the two panels lazily at the declared milestones. Thin method dispatch for
 GiGPO, HGPO, and GraphGPO remains to be added while retaining each public
@@ -322,12 +322,8 @@ method's native trainer entrypoint. Do not merge the separate trainers into a
 new framework.
 
 The controlled main table uses binary terminal success with invalid-action
-shaping disabled for every method. The separate YAML mode `on` applies the
-public-recipe coefficient `0.1`; for Jev it changes only the invalid turn to
-`c*(2*q-1)-0.1`, rather than silently mutating an outcome reward that its
-estimator ignores. Any official-recipe systems comparison with this shaping
-must remain a separately labeled ablation rather than being mixed into the
-controlled table.
+shaping permanently disabled in the maintained launcher. Jev credit remains
+exactly `c*(2*q-1)`; recipe-specific shaping is outside this harness.
 
 ### Benchmark and repository matrix
 
