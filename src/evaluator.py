@@ -231,7 +231,10 @@ def aggregate_panel(raw_path: Path, task_path: Path) -> dict[str, Any]:
         if len(task_ids) != 1:
             raise ValueError(f"trajectory {trajectory_id} spans multiple tasks")
         rows.sort(key=lambda row: int(row["turn_index"]))
-        score = sum(float(row["score"]) for row in rows)
+        scores = {float(row["score"]) for row in rows}
+        if len(scores) != 1:
+            raise ValueError(f"trajectory {trajectory_id} has inconsistent scores")
+        score = scores.pop()
         records.append(
             {
                 "task_uid": task_ids.pop(),

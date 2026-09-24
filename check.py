@@ -284,7 +284,7 @@ def check_evaluator_summary():
         raw_path = root / "0.jsonl"
         rows = [
             {"traj_uid": "a", "task_uid": "task-a", "turn_index": 0,
-             "score": 0, "is_action_valid": True},
+             "score": 1, "is_action_valid": True},
             {"traj_uid": "a", "task_uid": "task-a", "turn_index": 1,
              "score": 1, "is_action_valid": True},
             {"traj_uid": "b", "task_uid": "task-b", "turn_index": 0,
