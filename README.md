@@ -9,8 +9,8 @@
 git clone https://github.com/HuanLi0311/jev.git
 cd jev
 
-conda create -n jev-alfworld python=3.10.20 -y
-conda activate jev-alfworld
+conda create -n jev python=3.10.20 -y
+conda activate jev
 
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
@@ -28,7 +28,7 @@ ALFWorld 默认下载到当前用户的 `~/.cache/alfworld`。如需共享缓存
 Hugging Face 离线模式，因此需要提前下载：
 
 ```bash
-conda activate jev-alfworld
+conda activate jev
 cd jev
 
 MODEL_SNAPSHOT=$(hf download Qwen/Qwen2.5-1.5B-Instruct \
