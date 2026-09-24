@@ -126,6 +126,12 @@ validation_files = data.get("validation_files")
 for name, paths in (("train_files", train_files), ("validation_files", validation_files)):
     if not isinstance(paths, list) or not paths or any(not Path(item).is_file() for item in paths):
         raise SystemExit(f"data.{name} must contain existing files")
+data_shuffle = boolean(data, "shuffle")
+filter_overlong_prompts = boolean(data, "filter_overlong_prompts")
+truncation = data.get("truncation")
+if truncation not in {"error", "left", "right", "middle"}:
+    raise SystemExit("unsupported data.truncation")
+return_raw_chat = boolean(data, "return_raw_chat")
 
 optimization = config.get("optimization", {})
 learning_rate = number(optimization, "learning_rate", minimum=0)
@@ -133,6 +139,7 @@ if learning_rate == 0:
     raise SystemExit("learning_rate must be positive")
 ppo_mini_batch_size = integer(optimization, "ppo_mini_batch_size")
 use_kl_loss = boolean(optimization, "use_kl_loss")
+use_kl_in_reward = boolean(optimization, "use_kl_in_reward")
 kl_loss_coef = number(optimization, "kl_loss_coef", minimum=0)
 kl_loss_type = optimization.get("kl_loss_type")
 if kl_loss_type not in {"kl", "abs", "mse", "low_var_kl", "full"}:
@@ -141,6 +148,7 @@ if kl_loss_type not in {"kl", "abs", "mse", "low_var_kl", "full"}:
 generation = config.get("generation", {})
 max_prompt_length = integer(generation, "max_prompt_length")
 max_response_length = integer(generation, "max_response_length")
+enable_thinking = boolean(generation, "enable_thinking")
 train_generation = generation.get("train", {})
 eval_generation = generation.get("evaluation", {})
 for name, section in (("train", train_generation), ("evaluation", eval_generation)):
@@ -161,6 +169,7 @@ for key in (
 for key in (
     "optimizer_offload", "reference_parameter_offload", "persistent_rollout",
     "use_remove_padding", "use_torch_compile", "gradient_checkpointing",
+    "actor_parameter_offload",
     "enforce_eager", "enable_chunked_prefill", "free_cache_engine",
 ):
     boolean(runtime, key)
@@ -175,6 +184,10 @@ values = {
     "model_path": model_path,
     "train_files": train_files,
     "validation_files": validation_files,
+    "data_shuffle": data_shuffle,
+    "filter_overlong_prompts": filter_overlong_prompts,
+    "truncation": truncation,
+    "return_raw_chat": return_raw_chat,
     "groups": groups,
     "rollouts": rollouts,
     "max_steps": max_steps,
@@ -189,10 +202,12 @@ values = {
     "learning_rate": learning_rate,
     "ppo_mini_batch_size": ppo_mini_batch_size,
     "use_kl_loss": use_kl_loss,
+    "use_kl_in_reward": use_kl_in_reward,
     "kl_loss_coef": kl_loss_coef,
     "kl_loss_type": kl_loss_type,
     "max_prompt_length": max_prompt_length,
     "max_response_length": max_response_length,
+    "enable_thinking": enable_thinking,
     "train_temperature": train_generation["temperature"],
     "train_top_p": train_generation["top_p"],
     "train_top_k": train_generation["top_k"],
@@ -377,20 +392,22 @@ fi
 
 jev_process_reward=false
 [[ $arm == jev ]] && jev_process_reward=true
+no_thinking=true
+[[ ${cfg[enable_thinking]} == true ]] && no_thinking=false
 common_args=(
     "data.train_files=${cfg[train_files]}"
     "data.val_files=${cfg[validation_files]}"
     "data.train_batch_size=${cfg[groups]}"
     "data.val_batch_size=${cfg[panel_size]}"
-    data.shuffle=false
+    "data.shuffle=${cfg[data_shuffle]}"
     "+data.seed=$seed"
     +data.dataloader_num_workers=0
     "data.max_prompt_length=${cfg[max_prompt_length]}"
     "data.max_response_length=${cfg[max_response_length]}"
-    data.filter_overlong_prompts=true
-    data.truncation=left
-    data.return_raw_chat=true
-    +data.apply_chat_template_kwargs.enable_thinking=false
+    "data.filter_overlong_prompts=${cfg[filter_overlong_prompts]}"
+    "data.truncation=${cfg[truncation]}"
+    "data.return_raw_chat=${cfg[return_raw_chat]}"
+    "+data.apply_chat_template_kwargs.enable_thinking=${cfg[enable_thinking]}"
     "actor_rollout_ref.model.path=$model_path"
     "actor_rollout_ref.actor.optim.lr=${cfg[learning_rate]}"
     "actor_rollout_ref.actor.use_torch_compile=${cfg[use_torch_compile]}"
@@ -401,7 +418,7 @@ common_args=(
     "actor_rollout_ref.actor.kl_loss_coef=${cfg[kl_loss_coef]}"
     "actor_rollout_ref.actor.kl_loss_type=${cfg[kl_loss_type]}"
     "actor_rollout_ref.model.enable_gradient_checkpointing=${cfg[gradient_checkpointing]}"
-    actor_rollout_ref.actor.fsdp_config.param_offload=false
+    "actor_rollout_ref.actor.fsdp_config.param_offload=${cfg[actor_parameter_offload]}"
     "actor_rollout_ref.actor.fsdp_config.optimizer_offload=$optimizer_offload"
     actor_rollout_ref.rollout.name=vllm
     "+actor_rollout_ref.rollout.seed=$seed"
@@ -423,13 +440,13 @@ common_args=(
     "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=$log_prob_micro_batch"
     "actor_rollout_ref.ref.fsdp_config.param_offload=$ref_param_offload"
     "actor_rollout_ref.actor.use_invalid_action_penalty=${cfg[invalid_action_shaping]}"
-    algorithm.use_kl_in_reward=false
+    "algorithm.use_kl_in_reward=${cfg[use_kl_in_reward]}"
     env.env_name=alfworld/AlfredTWEnv
     "env.seed=$seed"
     "env.history_length=${cfg[history_length]}"
     "env.max_steps=${cfg[max_steps]}"
     "env.rollout.n=${cfg[rollouts]}"
-    +env.alfworld.no_thinking=true
+    "+env.alfworld.no_thinking=$no_thinking"
     "+env.alfworld.jev_process_reward=$jev_process_reward"
     "+env.alfworld.jev_log_path=$run_dir/jev-process.jsonl"
     env.resources_per_worker.num_cpus=0.1

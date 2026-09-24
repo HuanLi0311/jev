@@ -10,6 +10,10 @@ data:
   validation_files:
     - /home/JJ_Group/lih2511/data/verl-agent/text/test.parquet
     - /home/JJ_Group/lih2511/data/verl-agent/text/test.parquet
+  shuffle: false
+  filter_overlong_prompts: true
+  truncation: left
+  return_raw_chat: true
 
 training:
   tasks: 16       # task groups per update
@@ -26,12 +30,14 @@ optimization:
   learning_rate: 0.000001
   ppo_mini_batch_size: 16
   use_kl_loss: true
+  use_kl_in_reward: false
   kl_loss_coef: 0.01
   kl_loss_type: low_var_kl
 
 generation:
   max_prompt_length: 2048
   max_response_length: 256
+  enable_thinking: false
   train:
     temperature: 1.0
     top_p: 1.0
@@ -58,6 +64,7 @@ runtime:
   use_remove_padding: false
   use_torch_compile: false
   gradient_checkpointing: true
+  actor_parameter_offload: false
   enforce_eager: true
   enable_chunked_prefill: true
   free_cache_engine: true
