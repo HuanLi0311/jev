@@ -249,7 +249,7 @@ unreleased method.
 
 | Priority | Arm | Credit source | Policy base model | Additional model | Local source |
 |---|---|---|---|---|---|
-| Core | Sparse GRPO | binary terminal success, trajectory-level group advantage | Qwen2.5-1.5B-Instruct | none | `verl-agent/` and `scripts/run_grpo_alfworld.sh` |
+| Core | Sparse GRPO | binary terminal success, trajectory-level group advantage | Qwen2.5-1.5B-Instruct | none | `verl-agent/` and `scripts/run_alfworld.sh` |
 | Core | Jev-only (ours) | post-episode `c*(2*q-1)` per action turn | same exact checkpoint | remote `jev-1.13.0` service | current local adaptation |
 | Main baseline | GiGPO | episode groups plus repeated-state step groups | same exact checkpoint | none | `verl-agent/examples/gigpo_trainer/` |
 | Main baseline | HGPO | context-aware hierarchical step groups | same exact checkpoint | none | `verl-agent/recipe/hgpo/` |
@@ -313,13 +313,18 @@ selection. If the measured budget must be reduced, reduce it identically for
 all arms and freeze the new budget before inspecting benchmark outcomes.
 
 `config/config.yaml` is the single executable source for the common scale,
-paired seeds, fixed evaluation panels, milestone schedule, and policy revision.
-The GRPO/Jev launcher consumes it without local
-scale defaults, records it in each run directory, rejects seed 0, and evaluates
-the two panels lazily at the declared milestones. Thin method dispatch for
-GiGPO, HGPO, and GraphGPO remains to be added while retaining each public
-method's native trainer entrypoint. Do not merge the separate trainers into a
+paired seeds, shared optimization/generation settings, fixed evaluation panels,
+milestone schedule, and policy revision. `scripts/run_alfworld.sh` consumes it,
+records the resolved selection, rejects seed 0, and dispatches Sparse GRPO,
+Jev-only, GiGPO, HGPO, and GraphGPO to their existing native trainer entrypoints.
+It applies the paired seed to the environment, dataloader, and vLLM and saves
+all declared milestone checkpoints. Do not merge the separate trainers into a
 new framework.
+
+All actor checkpoints are evaluated through `src/evaluator.py`, not through
+recipe-specific validation. The evaluator uses the shared actor checkpoint
+format, greedy decoding, fixed seed 1000, and the same 128-task `valid_seen` and
+`valid_unseen` panels, and preserves raw transitions plus per-task records.
 
 The controlled main table uses binary terminal success with invalid-action
 shaping permanently disabled in the maintained launcher. Jev credit remains

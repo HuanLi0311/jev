@@ -133,33 +133,47 @@ policy improvement requires the later matched GRPO training experiment.
 ## Online training and efficiency checks
 
 The copied and locally adapted training stack is in [`verl-agent/`](verl-agent/);
-the source tree under `test/dllm/iclr_4/` is not modified. The launcher selects
-standard sparse GRPO for `baseline` and the sole Jev process-reward estimator
-for `jev`; there are no version or reward-mode switches:
+the source tree under `test/dllm/iclr_4/` is not modified. One launcher dispatches
+the five controlled arms to their native trainers:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
-  ./scripts/run_grpo_alfworld.sh jev RUN_TAG 1
+  ./scripts/run_alfworld.sh jev RUN_TAG 1
 ```
+
+Replace `jev` with `grpo`, `gigpo`, `hgpo`, or `graphgpo` for the other arms.
 
 [`config/config.yaml`](config/config.yaml) is the single source of truth for
 the formal scale: 16 task groups per update, eight rollouts per group, 50
 actions, 150 updates, paired seeds 1/2/3, fixed 128-task `valid_seen` and
-`valid_unseen` panels, and checkpoint/evaluation milestones 0/10/40/80/150.
-Invalid-action shaping is permanently disabled in this maintained path. Seed
-0 is rejected. Validate a selection without creating a run with:
+`valid_unseen` panels, checkpoint milestones 0/10/40/80/150, and shared
+optimization/generation settings. The selected seed is applied to the
+environment, dataloader, and vLLM. Invalid-action shaping is disabled for every
+arm and seed 0 is rejected. Validate a selection without creating a run with:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 CHECK_CONFIG_ONLY=true \
-  ./scripts/run_grpo_alfworld.sh jev check 1
+  ./scripts/run_alfworld.sh graphgpo check 1
 ```
 
-The launcher copies the experiment YAML and selected seed into the run
-directory and refuses a resume if they differ. Per-task validation records are
-stored by split under `evaluations/`; artifacts otherwise stay under
-`runs/grpo-alfworld-RUN_TAG/`. To run a reduced infrastructure check, point
-`CONFIG_PATH` at a separate YAML instead of overriding formal scale values with
-environment variables.
+The launcher copies the experiment YAML, arm, selected seed, and resolved
+runtime settings into the run directory and refuses a mismatched resume.
+Training uses each method's native trainer and writes checkpoints under
+`runs/grpo-alfworld-RUN_TAG/checkpoints/`. Evaluate every arm through the same
+policy-only evaluator rather than its recipe-specific validation path:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 \
+  python src/evaluator.py \
+    runs/grpo-alfworld-RUN_TAG/checkpoints/global_step_40 \
+    runs/grpo-alfworld-RUN_TAG/evaluations/global_step_40
+```
+
+Use `base` instead of a checkpoint path for update 0. The evaluator fixes seed
+1000, greedy decoding, and both 128-task panels, then writes raw transition
+records, one record per evaluated trajectory, a summary, and a manifest. To run
+a reduced infrastructure check, point `CONFIG_PATH` at a separate YAML instead
+of overriding formal scale values with environment variables.
 
 For the four-GPU Qwen2.5-1.5B pilot, set `REF_PARAM_OFFLOAD=false`,
 `OPTIMIZER_OFFLOAD=false`, and `PERSISTENT_ROLLOUT=true`. The persistent rollout
