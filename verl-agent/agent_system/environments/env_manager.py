@@ -641,8 +641,11 @@ def make_envs(config):
             raise ValueError(f"Unsupported environment: {config.env.env_name}")
 
         projection_f = partial(alfworld_projection, require_think=not config.env.alfworld.get('no_thinking', False))
-        _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, resources_per_worker=resources_per_worker)
-        envs = AlfWorldEnvironmentManager(_envs, projection_f, config)
+        if config.trainer.get('val_only', False):
+            envs = None
+        else:
+            _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, resources_per_worker=resources_per_worker)
+            envs = AlfWorldEnvironmentManager(_envs, projection_f, config)
 
         panels = config.env.alfworld.get('eval_panels')
         if panels:

@@ -1048,9 +1048,24 @@ class RayPPOTrainer:
         # load checkpoint before doing anything
         self._load_checkpoint()
 
+        configured_eval_steps = self.config.trainer.get("eval_steps")
+        eval_steps = None if configured_eval_steps is None else set(configured_eval_steps)
+        configured_checkpoint_steps = self.config.trainer.get("checkpoint_steps")
+        checkpoint_steps = (
+            None if configured_checkpoint_steps is None
+            else set(configured_checkpoint_steps)
+        )
+        if checkpoint_steps is not None and self.global_steps == 0 and 0 in checkpoint_steps:
+            self._save_checkpoint()
+
         # perform validation before training
         # currently, we only support validation using the reward_function.
-        if self.val_reward_fn is not None and self.config.trainer.get("val_before_train", True):
+        initial_validation = (
+            self.global_steps in eval_steps
+            if eval_steps is not None
+            else self.config.trainer.get("val_before_train", True)
+        )
+        if self.val_reward_fn is not None and initial_validation:
             val_metrics = self._validate()
             assert val_metrics, f"{val_metrics=}"
             pprint(f"Initial validation metrics: {val_metrics}")
@@ -1308,14 +1323,28 @@ class RayPPOTrainer:
                             )
 
                     # validate
-                    if self.val_reward_fn is not None and self.config.trainer.test_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.test_freq == 0):
+                    scheduled_validation = (
+                        self.global_steps in eval_steps
+                        if eval_steps is not None
+                        else self.config.trainer.test_freq > 0 and (
+                            is_last_step or self.global_steps % self.config.trainer.test_freq == 0
+                        )
+                    )
+                    if self.val_reward_fn is not None and scheduled_validation:
                         with _timer("testing", timing_raw):
                             val_metrics: dict = self._validate()
                             if is_last_step:
                                 last_val_metrics = val_metrics
                         metrics.update(val_metrics)
 
-                    if self.config.trainer.save_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.save_freq == 0):
+                    scheduled_checkpoint = (
+                        self.global_steps in checkpoint_steps
+                        if checkpoint_steps is not None
+                        else self.config.trainer.save_freq > 0 and (
+                            is_last_step or self.global_steps % self.config.trainer.save_freq == 0
+                        )
+                    )
+                    if scheduled_checkpoint:
                         with _timer("save_checkpoint", timing_raw):
                             self._save_checkpoint()
 
