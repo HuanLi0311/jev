@@ -392,8 +392,6 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
             index=data.non_tensor_batch["uid"],
             traj_index=data.non_tensor_batch["traj_uid"],
             turn_index=data.non_tensor_batch["turn_index"],
-            action_valids=data.non_tensor_batch["is_action_valid"],
-            invalid_action_penalty=kwargs.get("jev_invalid_action_penalty", 0.0),
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
@@ -1309,10 +1307,7 @@ class RayPPOTrainer:
                             batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
 
                         # compute rewards. apply_invalid_action_penalty if available
-                        if (
-                            self.config.actor_rollout_ref.actor.get('use_invalid_action_penalty', True)
-                            and self.config.algorithm.adv_estimator != AdvantageEstimator.JEV_STEP_GRPO
-                        ):
+                        if self.config.actor_rollout_ref.actor.get('use_invalid_action_penalty', True):
                             batch, invalid_metrics = apply_invalid_action_penalty(batch,
                                                                                   invalid_action_penalty_coef=self.config.actor_rollout_ref.actor.invalid_action_penalty_coef,
                                                                                   )
@@ -1350,11 +1345,6 @@ class RayPPOTrainer:
                             ours_process_weight=self.config.algorithm.ours.process_weight,
                             ours_outcome_weight=self.config.algorithm.ours.outcome_weight,
                             ours_advantage_clip=self.config.algorithm.ours.advantage_clip,
-                            jev_invalid_action_penalty=(
-                                self.config.actor_rollout_ref.actor.invalid_action_penalty_coef
-                                if self.config.actor_rollout_ref.actor.get('use_invalid_action_penalty', True)
-                                else 0.0
-                            ),
                         )
                         if "ours_metrics" in batch.meta_info:
                             metrics.update({

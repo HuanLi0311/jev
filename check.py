@@ -42,17 +42,13 @@ def check_formal_config():
         "eval_in_distribution",
         "eval_out_of_distribution",
     }
-    assert config["invalid_action_shaping"]["modes"] == {
-        "off": False,
-        "on": True,
-    }
     assert sum(
         parquet.read_metadata(path).num_rows for path in config["data"]["train_files"]
     ) == training["task"]
     assert sum(
         parquet.read_metadata(path).num_rows
         for path in config["data"]["validation_files"]
-    ) == evaluation["tasks_per_panel"]
+    ) == evaluation["tasks"]
 
 
 def check_public_input():
@@ -122,19 +118,6 @@ def check_advantage():
     assert torch.allclose(advantages, expected, atol=1e-6)
     assert torch.equal(advantages, returns)
     assert metrics["nonzero_transition_fraction"] == 2 / 3
-
-    shaped, _, shaped_metrics = compute_jev_step_grpo_advantage(
-        action_valids=np.array([1, 0, 0]),
-        invalid_action_penalty=0.1,
-        token_level_rewards=torch.zeros_like(masks),
-        **kwargs,
-    )
-    assert torch.allclose(shaped, expected - torch.tensor([
-        [0.0, 0.0, 0.0],
-        [0.1, 0.0, 0.0],
-        [0.1, 0.1, 0.1],
-    ]), atol=1e-6)
-    assert shaped_metrics["invalid_action_fraction"] == 2 / 3
 
     # The verifier outcome conditions Jev upstream, but is not added to A again.
     changed_outcomes, _, _ = compute_jev_step_grpo_advantage(
