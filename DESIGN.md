@@ -261,8 +261,24 @@ LLM control after the common harness passes because it requires a new online
 adapter. AgentPRM is open source but uses a separately SFT-tuned
 Llama-3.2-3B policy, a trained PRM, OnlineDPO, and patched OpenInstruct/SGLang;
 it is not an algorithm-controlled baseline for this table. HCAPO, TRACE, and
-other methods without public runnable implementations are excluded rather than
-reimplemented from the paper.
+other methods without official public runnable implementations are outside the
+experiment inventory rather than reimplemented from the paper.
+
+Public code is necessary but not sufficient for the controlled table: a method
+must also support the same environment, policy checkpoint, and transition
+budget without reproducing an entire incompatible training pipeline. The first
+external extension, after the five local arms pass the common harness, is CAPO
+(the repository formerly named StepPO). It provides public action-level credit
+and policy-update code for ALFWorld and WebShop, but requires a separate pinned
+checkout and compatibility smoke test. Do not clone it until the local harness
+is frozen.
+
+Other public systems remain separate system-level comparisons rather than main
+table arms. SDAR/RetireOPD and GRSD add self-distillation or multi-stage teacher
+pipelines; SPA-RL and AgentPRM require SFT plus a learned progress/reward model;
+T2PO changes exploration; and IGPO/TIPS assume search tasks with a gold-answer
+likelihood. Comparing any of them requires its native model and total-compute
+accounting, not silently porting one formula into the ALFWorld harness.
 
 Qwen2.5-1.5B-Instruct is the sole primary policy model because it is shared by
 all local recipes and the pilot; use the cached revision
@@ -291,6 +307,12 @@ five-update GRPO/Jev pair. These are infrastructure and cost checks, not model
 selection. If the measured budget must be reduced, reduce it identically for
 all arms and freeze the new budget before inspecting benchmark outcomes.
 
+The current local launcher is not yet this formal harness: it accepts only the
+GRPO and Jev arms and hard-codes four rollouts per group. The minimum required
+engineering change is to expose the common scale parameters and add thin
+method dispatch while retaining each public method's native trainer entrypoint.
+Do not merge the separate trainers into a new framework.
+
 The controlled main table uses binary terminal success with invalid-action
 shaping disabled for every method. The public GiGPO/HGPO/GraphGPO launchers
 enable a `0.1` invalid-action penalty, but the maintained Jev estimator builds
@@ -312,7 +334,10 @@ GRPO, GiGPO, HGPO, and GraphGPO are already present in the locally adapted
 `verl-agent/`; cloning another copy would create version drift. The local
 Qwen2.5-1.5B policy and Qwen3-8B judge weights are also present. The only
 near-term external preparation is the WebShop data/environment setup; the 7B
-scale phase additionally needs Qwen2.5-7B-Instruct weights.
+scale phase additionally needs Qwen2.5-7B-Instruct weights. CAPO is the only
+recommended additional repository checkout, and only after its compatibility
+gate is scheduled; pin the exact commit in the run manifest. Do not clone the
+other screened systems unless a separate system-level comparison is approved.
 
 ## Sources and design rationale
 
