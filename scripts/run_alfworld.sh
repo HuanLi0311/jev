@@ -308,12 +308,19 @@ else
     [[ $(<"$run_dir/run-selection.txt") == "$selection" ]] || { echo 'arm or seed differs from the original run' >&2; exit 2; }
 fi
 
-{
+runtime_selection=$(
     printf 'arm=%s\nseed=%s\ndata_seed=%s\nrollout_seed=%s\n' "$arm" "$seed" "$seed" "$seed"
     printf 'gpu_count=%s\nactor_micro_batch_size_per_gpu=%s\nlog_prob_micro_batch_size_per_gpu=%s\n' "$gpu_count" "$actor_micro_batch" "$log_prob_micro_batch"
     printf 'optimizer_offload=%s\nreference_parameter_offload=%s\npersistent_rollout=%s\n' "$optimizer_offload" "$ref_param_offload" "$persistent_rollout"
     printf 'tensor_model_parallel_size=%s\nrollout_gpu_memory_utilization=%s\nray_num_cpus=%s\n' "$tensor_parallel_size" "$rollout_gpu_util" "$ray_num_cpus"
-} > "$run_dir/resolved-runtime.txt"
+)
+if [[ $resume_mode == disable ]]; then
+    printf '%s' "$runtime_selection" > "$run_dir/resolved-runtime.txt"
+else
+    [[ $(<"$run_dir/resolved-runtime.txt") == "$runtime_selection" ]] || {
+        echo 'runtime settings differ from the original run' >&2; exit 2;
+    }
+fi
 
 export ALFWORLD_DATA=$root/.cache/alfworld
 export PYTHONPATH=$project/src:$repo${PYTHONPATH:+:$PYTHONPATH}
