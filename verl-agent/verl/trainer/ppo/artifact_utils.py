@@ -22,6 +22,7 @@ NON_TENSOR_FIELDS = (
     "episode_rewards",
     "episode_success",
     "episode_lengths",
+    "tool_callings",
     "jev_effect_scores",
     "jev_confidences",
     "data_source",
@@ -46,6 +47,8 @@ def _json_value(value):
 
 def _masked_values(tensor, mask, reduction):
     values = tensor.detach().float().cpu()
+    if values.ndim == 1:
+        return values.tolist()
     mask = mask.detach().bool().cpu()
     if reduction == "sum":
         return (values * mask).sum(-1).tolist()

@@ -24,6 +24,7 @@ import uuid
 from verl.models.transformers.qwen2_vl import get_rope_index
 from recipe.GraphGPO.utils import process_image, to_list_of_dict, torch_to_numpy, filter_group_data
 from agent_system.environments import EnvironmentManagerBase
+from agent_system.multi_turn_rollout.rollout_loop import stable_task_uids
 from typing import List, Dict
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
@@ -264,6 +265,9 @@ class TrajectoryCollector:
         success_rate = {}
         for key, value in success.items():
             success_rate[key] = np.mean(value)
+        episode_success = success.get('success_rate')
+        if episode_success is None or len(episode_success) != batch_size:
+            raise ValueError("success_rate must contain one value per trajectory")
         effective_batch = []
         for bs in range(batch_size):
             # sum the rewards for each data in total_batch_list[bs]
@@ -279,6 +283,7 @@ class TrajectoryCollector:
                     # success_rate
                     for key, value in success_rate.items():
                         data[key] = value
+                    data['episode_success'] = bool(episode_success[bs])
                     
                     data['anchor_obs']=to_hashable(data['anchor_obs'])
                     data['next_obs']=to_hashable(data['next_obs'])
@@ -337,6 +342,7 @@ class TrajectoryCollector:
         else: # no env grouping, set all to the same uid
             uid = str(uuid.uuid4())
             uid_batch = np.array([uid for _ in range(len(gen_batch.batch))], dtype=object)
+        task_uid_batch = stable_task_uids(infos, uid_batch)
         is_done = np.zeros(batch_size, dtype=bool)
         traj_uid = np.array([str(uuid.uuid4()) for _ in range(batch_size)], dtype=object)
         total_batch_list = [[] for _ in range(batch_size)]
@@ -372,11 +378,14 @@ class TrajectoryCollector:
             batch_output = unpad_dataproto(batch_output_padded, pad_size=pad_size)
 
             batch.non_tensor_batch['uid'] = uid_batch
+            batch.non_tensor_batch['task_uid'] = task_uid_batch
             batch.non_tensor_batch['traj_uid'] = traj_uid
 
             batch = batch.union(batch_output)
             
             text_actions = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
+            batch.non_tensor_batch['action_text'] = np.asarray(text_actions, dtype=object)
+            batch.non_tensor_batch['turn_index'] = np.full(batch_size, _step, dtype=np.int32)
             
             next_obs, rewards, dones, infos = envs.step(text_actions)
 
@@ -386,6 +395,11 @@ class TrajectoryCollector:
             if len(dones.shape) == 2:
                 # dones is numpy, delete a dimension
                 dones = dones.squeeze(1)
+
+            batch.non_tensor_batch['observed_result'] = np.asarray(
+                [info.get('observation_text', '') for info in infos], dtype=object
+            )
+            batch.non_tensor_batch['done'] = np.asarray(dones, dtype=bool)
 
             if 'is_action_valid' in infos[0]:
                 batch.non_tensor_batch['is_action_valid'] = np.array([info['is_action_valid'] for info in infos], dtype=bool)

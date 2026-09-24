@@ -15,8 +15,12 @@
 A Ray logger will receive logging info from different processes.
 """
 
+import json
 import logging
 import numbers
+import os
+import time
+from pathlib import Path
 from typing import Dict
 
 
@@ -32,6 +36,11 @@ def concat_dict_to_str(dict: Dict, step):
 class LocalLogger:
     def __init__(self, remote_logger=None, enable_wandb=False, print_to_console=False):
         self.print_to_console = print_to_console
+        metrics_file = os.environ.get("VERL_METRICS_FILE")
+        self.metrics_file = Path(metrics_file) if metrics_file else None
+        self.started = time.monotonic()
+        if self.metrics_file:
+            self.metrics_file.parent.mkdir(parents=True, exist_ok=True)
         if print_to_console:
             print("Using LocalLogger is deprecated. The constructor API will change ")
 
@@ -39,6 +48,19 @@ class LocalLogger:
         pass
 
     def log(self, data, step):
+        if self.metrics_file:
+            record = {
+                "step": int(step),
+                "time_unix": time.time(),
+                "process_elapsed_seconds": time.monotonic() - self.started,
+            }
+            record.update({
+                key: value.item() if hasattr(value, "item") else value
+                for key, value in data.items()
+                if isinstance(value, numbers.Number)
+            })
+            with self.metrics_file.open("a", encoding="utf-8") as sink:
+                sink.write(json.dumps(record, ensure_ascii=False) + "\n")
         if self.print_to_console:
             print(concat_dict_to_str(data, step=step), flush=True)
 

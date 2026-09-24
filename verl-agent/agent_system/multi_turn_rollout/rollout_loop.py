@@ -269,6 +269,9 @@ class TrajectoryCollector:
         success_rate = {}
         for key, value in success.items():
             success_rate[key] = np.mean(value)
+        episode_success = success.get('success_rate')
+        if episode_success is None or len(episode_success) != batch_size:
+            raise ValueError("success_rate must contain one value per trajectory")
         
         effective_batch = []
         for bs in range(batch_size):
@@ -285,6 +288,7 @@ class TrajectoryCollector:
                     # success_rate
                     for key, value in success_rate.items():
                         data[key] = value
+                    data['episode_success'] = bool(episode_success[bs])
 
                     effective_batch.append(data)
             
@@ -403,6 +407,11 @@ class TrajectoryCollector:
             if len(dones.shape) == 2:
                 # dones is numpy, delete a dimension
                 dones = dones.squeeze(1)
+
+            batch.non_tensor_batch['observed_result'] = np.asarray(
+                [info.get('observation_text', '') for info in infos], dtype=object
+            )
+            batch.non_tensor_batch['done'] = np.asarray(dones, dtype=bool)
 
             if 'is_action_valid' in infos[0]:
                 batch.non_tensor_batch['is_action_valid'] = np.array([info['is_action_valid'] for info in infos], dtype=bool)

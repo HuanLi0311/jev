@@ -459,6 +459,7 @@ if [[ ${PYTHON_NO_SITE:-false} == true ]]; then
 fi
 export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
 export VLLM_ATTENTION_BACKEND=FLASHINFER TORCHDYNAMO_DISABLE=1
+export VERL_METRICS_FILE=$run_dir/metrics.jsonl
 # ponytail: a per-run tmpfs path lets two local Ray clusters coexist safely.
 export RAY_TMPDIR=${RAY_TMPDIR:-/dev/shm}
 mkdir -p "$RAY_TMPDIR"
