@@ -63,13 +63,25 @@ def dump_training_transitions(batch, tokenizer, dump_path, global_step, extra_in
     output = target / f"{global_step}.jsonl"
 
     response_mask = batch.batch["response_mask"].bool()
+    response_tokens = response_mask.sum(-1).detach().cpu().tolist()
     records = {
         "schema_version": [1] * len(batch),
         "update": [int(global_step)] * len(batch),
         "input": tokenizer.batch_decode(batch.batch["prompts"], skip_special_tokens=True),
         "output": tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True),
-        "response_tokens": response_mask.sum(-1).detach().cpu().tolist(),
+        "response_tokens": response_tokens,
     }
+    if "attention_mask" in batch.batch:
+        prompt_length = batch.batch["prompts"].shape[-1]
+        prompt_tokens = (
+            batch.batch["attention_mask"][:, :prompt_length]
+            .sum(-1).detach().cpu().tolist()
+        )
+        records["prompt_tokens"] = prompt_tokens
+        records["total_tokens"] = [
+            prompt + response
+            for prompt, response in zip(prompt_tokens, response_tokens, strict=True)
+        ]
     tensor_fields = {
         "token_level_scores": ("score", "sum"),
         "token_level_rewards": ("reward", "sum"),

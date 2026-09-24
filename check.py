@@ -339,6 +339,9 @@ def check_training_artifacts():
                 "prompts": torch.tensor([[1, 2], [1, 2]]),
                 "responses": torch.tensor([[3, 4], [3, 0]]),
                 "response_mask": torch.tensor([[1, 1], [1, 0]]),
+                "attention_mask": torch.tensor([
+                    [1, 1, 1, 1], [1, 1, 1, 0]
+                ]),
                 "token_level_scores": torch.tensor([[0.0, 1.0], [0.0, 0.0]]),
                 "advantages": torch.tensor([[0.2, 0.4], [-0.1, 0.0]]),
                 "step_rewards": torch.tensor([0.75, -0.25]),
@@ -365,6 +368,7 @@ def check_training_artifacts():
         ]
         assert abs(rows[0]["advantage"] - 0.3) < 1e-6
         assert rows[0]["step_reward"] == 0.75
+        assert rows[0]["prompt_tokens"] == 2 and rows[0]["total_tokens"] == 4
         assert [row["padding_duplicate"] for row in rows] == [False, True]
 
         metrics_path = root / "metrics.jsonl"

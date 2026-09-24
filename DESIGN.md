@@ -343,8 +343,9 @@ frozen config and resolved runtime, `train.log`, numeric update records in
 manifest, summary, raw panel transitions, and per-task records. Jev additionally
 keeps raw judge requests/responses, latency, token usage, and turn credit in
 `jev-process.jsonl`. Transition records retain observations, actions, observed
-results, validity, outcome, rewards/advantages, and a `padding_duplicate` flag
-so batch-padding copies can be excluded from analyses without deleting them.
+results, validity, outcome, rewards/advantages, prompt/response token counts,
+and a `padding_duplicate` flag so batch-padding copies can be excluded from
+analyses without deleting them.
 
 The controlled main table uses binary terminal success with invalid-action
 shaping permanently disabled in the maintained launcher. Jev credit remains
