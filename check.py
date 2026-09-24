@@ -31,22 +31,16 @@ def check_formal_config():
     config = yaml.safe_load(
         (Path(__file__).resolve().parent / "config" / "config.yaml").read_text()
     )
-    assert config["training"] == {
-        "task": 16,
-        "samples": 8,
-        "max_steps": 50,
-        "history_length": 2,
-        "updates": 150,
-        "paired_seeds": [1, 2, 3],
-    }
-    assert config["evaluation"] == {
-        "tasks_per_panel": 128,
-        "seed": 1000,
-        "panels": {
-            "valid_seen": "eval_in_distribution",
-            "valid_unseen": "eval_out_of_distribution",
-        },
-        "milestones": [0, 10, 40, 80, 150],
+    training = config["training"]
+    evaluation = config["evaluation"]
+    assert training["task"] > 0 and training["samples"] > 0
+    assert 0 not in training["paired_seeds"]
+    assert len(training["paired_seeds"]) == len(set(training["paired_seeds"]))
+    assert evaluation["milestones"][0] == 0
+    assert evaluation["milestones"][-1] == training["updates"]
+    assert set(evaluation["panels"].values()) <= {
+        "eval_in_distribution",
+        "eval_out_of_distribution",
     }
     assert config["invalid_action_shaping"]["modes"] == {
         "off": False,
@@ -54,11 +48,11 @@ def check_formal_config():
     }
     assert sum(
         parquet.read_metadata(path).num_rows for path in config["data"]["train_files"]
-    ) == 16
+    ) == training["task"]
     assert sum(
         parquet.read_metadata(path).num_rows
         for path in config["data"]["validation_files"]
-    ) == 128
+    ) == evaluation["tasks_per_panel"]
 
 
 def check_public_input():

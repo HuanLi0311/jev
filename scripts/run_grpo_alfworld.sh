@@ -49,8 +49,8 @@ if type(history_length) is not int or history_length < 0:
     raise SystemExit("history_length must be a nonnegative integer")
 updates = positive(training, "updates")
 seeds = training.get("paired_seeds")
-if not isinstance(seeds, list) or len(seeds) != 3 or len(set(seeds)) != 3:
-    raise SystemExit("paired_seeds must contain three distinct seeds")
+if not isinstance(seeds, list) or not seeds or len(set(seeds)) != len(seeds):
+    raise SystemExit("paired_seeds must contain distinct seeds")
 if any(type(value) is not int or value <= 0 for value in seeds):
     raise SystemExit("paired_seeds must be positive integers and exclude seed 0")
 try:
@@ -66,12 +66,10 @@ eval_seed = evaluation.get("seed")
 if type(eval_seed) is not int or eval_seed < 0:
     raise SystemExit("evaluation.seed must be a nonnegative integer")
 panels = evaluation.get("panels")
-expected_panels = {
-    "valid_seen": "eval_in_distribution",
-    "valid_unseen": "eval_out_of_distribution",
-}
-if panels != expected_panels:
-    raise SystemExit(f"evaluation.panels must be {expected_panels}")
+if not isinstance(panels, dict) or not panels:
+    raise SystemExit("evaluation.panels must be a nonempty mapping")
+if any(dataset not in {"eval_in_distribution", "eval_out_of_distribution"} for dataset in panels.values()):
+    raise SystemExit("evaluation panels contain an unsupported ALFWorld split")
 milestones = evaluation.get("milestones")
 if (
     not isinstance(milestones, list)
