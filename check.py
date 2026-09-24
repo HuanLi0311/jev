@@ -36,6 +36,7 @@ def check_formal_config():
     training = config["training"]
     evaluation = config["evaluation"]
     assert training["tasks"] > 0 and training["rollouts"] > 0
+    assert training["paired_seeds"] == [1]
     assert 0 not in training["paired_seeds"]
     assert len(training["paired_seeds"]) == len(set(training["paired_seeds"]))
     assert evaluation["milestones"][0] == 0
@@ -48,16 +49,23 @@ def check_formal_config():
     assert training["invalid_action_shaping"] is False
     assert config["data"]["shuffle"] is False
     assert config["data"]["truncation"] == "left"
-    assert config["generation"]["enable_thinking"] is False
+    assert config["generation"]["max_response_length"] == 512
+    assert config["generation"]["enable_thinking"] is True
     assert config["generation"]["evaluation"] == {
-        "temperature": 0.0,
+        "temperature": 0.4,
         "top_p": 1.0,
         "top_k": -1,
-        "do_sample": False,
+        "do_sample": True,
     }
     assert config["optimization"]["learning_rate"] > 0
-    assert config["optimization"]["ppo_mini_batch_size"] > 0
+    assert config["optimization"]["ppo_mini_batch_size"] == 256
     assert config["optimization"]["use_kl_in_reward"] is False
+    runtime = config["runtime"]
+    assert runtime["tensor_model_parallel_size"] == 2
+    assert runtime["use_remove_padding"] is True
+    assert runtime["enforce_eager"] is False
+    assert runtime["enable_chunked_prefill"] is False
+    assert runtime["free_cache_engine"] is False
     for files, expected in (
         (config["data"]["train_files"], training["tasks"]),
         (config["data"]["validation_files"], evaluation["tasks"]),
@@ -114,17 +122,19 @@ def check_public_input():
 def check_action_format():
     manager = AlfWorldEnvironmentManager.__new__(AlfWorldEnvironmentManager)
     manager.config = SimpleNamespace(
-        env=SimpleNamespace(history_length=0, alfworld={"no_thinking": True})
+        env=SimpleNamespace(history_length=0, alfworld={"no_thinking": False})
     )
     prompt = manager.build_text_obs(
         ["Your task is to: find the lamp"], [["look"]], init=True
     )[0]
-    assert "<think>" not in prompt and "Reply only as <action>" in prompt
+    assert "<think>" in prompt and "<action>" in prompt
     assert alfworld_projection(
-        ["<action>look</action>"], [["look"]], require_think=False
+        ["<think>I should inspect the room.</think><action>look</action>"],
+        [["look"]],
+        require_think=True,
     ) == (["look"], [1])
     assert alfworld_projection(
-        ["look elsewhere<|im_end|>"], [["look"]], require_think=False
+        ["<action>look</action>"], [["look"]], require_think=True
     )[1] == [0]
 
 

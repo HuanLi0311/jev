@@ -86,8 +86,12 @@ def load_config(path: Path) -> dict[str, Any]:
     )
     validate_slot_files(validation_files, evaluation["tasks"], "evaluation")
     generation = config.get("generation", {}).get("evaluation", {})
-    if generation.get("do_sample") is not False or generation.get("temperature") != 0.0:
-        raise ValueError("formal evaluation must use greedy decoding")
+    do_sample = generation.get("do_sample")
+    temperature = generation.get("temperature")
+    if type(do_sample) is not bool or type(temperature) not in (int, float):
+        raise ValueError("evaluation sampling settings are invalid")
+    if do_sample and temperature <= 0:
+        raise ValueError("sampled evaluation requires positive temperature")
     return config
 
 
