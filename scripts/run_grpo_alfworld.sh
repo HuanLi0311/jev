@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage='usage: run_grpo_alfworld.sh baseline|jev RUN_TAG SEED [off|on]'
+usage='usage: run_grpo_alfworld.sh baseline|jev RUN_TAG SEED'
 arm=${1:?$usage}
 run_tag=${2:?$usage}
 seed=${3:?$usage}
-shaping_mode=${4:-}
+(( $# == 3 )) || { echo "$usage" >&2; exit 2; }
 [[ $arm == baseline || $arm == jev ]] || { echo 'arm must be baseline or jev' >&2; exit 2; }
 [[ $run_tag =~ ^[a-zA-Z0-9_-]+$ ]] || { echo 'invalid run tag' >&2; exit 2; }
 [[ ${CUDA_VISIBLE_DEVICES:-} =~ ^([0-9]+,){1,3}[0-9]+$ ]] || { echo 'set CUDA_VISIBLE_DEVICES to two or four GPU indices' >&2; exit 2; }
@@ -22,14 +22,14 @@ config_path=${CONFIG_PATH:-$project/config/config.yaml}
 [[ -f $config_path ]] || { echo "config missing: $config_path" >&2; exit 2; }
 
 config_output=$(
-    "$python" - "$config_path" "$seed" "$shaping_mode" <<'PY'
+    "$python" - "$config_path" "$seed" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 import yaml
 
-path, selected_seed, selected_mode = sys.argv[1:]
+path, selected_seed = sys.argv[1:]
 config = yaml.safe_load(Path(path).read_text())
 if not isinstance(config, dict):
     raise SystemExit("config must be a mapping")
@@ -61,7 +61,7 @@ if selected_seed not in seeds:
     raise SystemExit(f"SEED must be one of {seeds}")
 
 evaluation = config.get("evaluation", {})
-panel_size = positive(evaluation, "tasks_per_panel")
+panel_size = positive(evaluation, "tasks")
 eval_seed = evaluation.get("seed")
 if type(eval_seed) is not int or eval_seed < 0:
     raise SystemExit("evaluation.seed must be a nonnegative integer")
@@ -81,17 +81,6 @@ if (
 ):
     raise SystemExit("milestones must be sorted, unique, start at 0, and end at updates")
 
-shaping = config.get("invalid_action_shaping", {})
-modes = shaping.get("modes")
-if modes != {"off": False, "on": True}:
-    raise SystemExit("invalid_action_shaping.modes must define off=false and on=true")
-selected_mode = selected_mode or shaping.get("default", "")
-if selected_mode not in modes:
-    raise SystemExit("invalid-action shaping mode must be off or on")
-coefficient = shaping.get("coefficient")
-if type(coefficient) not in (int, float) or coefficient < 0:
-    raise SystemExit("invalid-action shaping coefficient must be nonnegative")
-
 model_path = config.get("model_path")
 if not isinstance(model_path, str) or not model_path.startswith("/"):
     raise SystemExit("model_path must be absolute")
@@ -107,13 +96,12 @@ values = [
     groups, rollouts, max_steps, history_length, updates,
     panel_size, eval_seed, json.dumps(panels, separators=(",", ":")),
     json.dumps(milestones, separators=(",", ":")), len(milestones),
-    selected_mode, str(modes[selected_mode]).lower(), coefficient,
 ]
 print("\n".join(map(str, values)))
 PY
 )
 mapfile -t config_values <<< "$config_output"
-(( ${#config_values[@]} == 16 )) || { echo 'config parser returned incomplete data' >&2; exit 2; }
+(( ${#config_values[@]} == 13 )) || { echo 'config parser returned incomplete data' >&2; exit 2; }
 model_path=${config_values[0]}
 train_files=${config_values[1]}
 validation_files=${config_values[2]}
@@ -127,14 +115,11 @@ eval_seed=${config_values[9]}
 eval_panels=${config_values[10]}
 milestones=${config_values[11]}
 milestone_count=${config_values[12]}
-shaping_mode=${config_values[13]}
-invalid_action_shaping=${config_values[14]}
-invalid_action_penalty=${config_values[15]}
 [[ -f $model_path/config.json ]] || { echo "model config missing: $model_path" >&2; exit 2; }
 if [[ ${CHECK_CONFIG_ONLY:-false} == true ]]; then
-    printf 'seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s shaping=%s\n' \
+    printf 'seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s\n' \
         "$seed" "$train_batch_size" "$rollouts_per_group" "$max_steps" "$updates" \
-        "$eval_panels" "$milestones" "$shaping_mode"
+        "$eval_panels" "$milestones"
     exit 0
 fi
 run_dir=$project/runs/grpo-alfworld-$run_tag
@@ -144,12 +129,12 @@ if [[ $resume_mode == disable ]]; then
     [[ ! -e $run_dir ]] || { echo "run directory exists: $run_dir" >&2; exit 2; }
     mkdir -p "$run_dir"
     cp "$config_path" "$run_dir/experiment-config.yaml"
-    printf 'seed=%s\ninvalid_action_shaping=%s\n' "$seed" "$shaping_mode" > "$run_dir/run-selection.txt"
+    printf 'seed=%s\n' "$seed" > "$run_dir/run-selection.txt"
 else
     [[ -d $run_dir ]] || { echo "resume run directory missing: $run_dir" >&2; exit 2; }
     cmp -s "$config_path" "$run_dir/experiment-config.yaml" || { echo 'config differs from the original run' >&2; exit 2; }
-    [[ $(<"$run_dir/run-selection.txt") == $(printf 'seed=%s\ninvalid_action_shaping=%s' "$seed" "$shaping_mode") ]] || {
-        echo 'seed or shaping mode differs from the original run' >&2; exit 2;
+    [[ $(<"$run_dir/run-selection.txt") == "seed=$seed" ]] || {
+        echo 'seed differs from the original run' >&2; exit 2;
     }
 fi
 
@@ -258,8 +243,7 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
     actor_rollout_ref.ref.fsdp_config.param_offload="$ref_param_offload" \
-    actor_rollout_ref.actor.use_invalid_action_penalty="$invalid_action_shaping" \
-    actor_rollout_ref.actor.invalid_action_penalty_coef="$invalid_action_penalty" \
+    actor_rollout_ref.actor.use_invalid_action_penalty=false \
     algorithm.use_kl_in_reward=false \
     env.env_name=alfworld/AlfredTWEnv env.seed="$seed" \
     env.history_length="$history_length" env.max_steps="$max_steps" env.rollout.n="$rollouts_per_group" \

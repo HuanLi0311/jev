@@ -12,8 +12,8 @@ data:
     - /home/JJ_Group/lih2511/data/verl-agent/text/test.parquet
 
 training:
-  task: 16       # task groups per update
-  samples: 8     # rollouts per task
+  tasks: 16       # task groups per update
+  rollouts: 8     # rollouts per task
   max_steps: 50
   history_length: 2
   updates: 150
