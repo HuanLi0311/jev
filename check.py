@@ -22,8 +22,10 @@ from agent_system.environments.env_package.alfworld.envs import worker_seed_and_
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
 from score_jev import public_completed_trajectory, questions_for_steps
+from verl.trainer.ppo.artifact_utils import dump_training_transitions
 from verl.trainer.ppo.core_algos import compute_jev_step_grpo_advantage
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
+from verl.utils.logger.aggregate_logger import LocalLogger
 from verl.workers.fsdp_workers import ActorRolloutRefWorker
 
 
@@ -330,6 +332,47 @@ def check_evaluator_summary():
         assert summary["valid_action_rate"] == 2 / 3
 
 
+def check_training_artifacts():
+    class Batch:
+        def __init__(self):
+            self.batch = {
+                "prompts": torch.tensor([[1, 2], [1, 2]]),
+                "responses": torch.tensor([[3, 4], [3, 0]]),
+                "response_mask": torch.tensor([[1, 1], [1, 0]]),
+                "token_level_scores": torch.tensor([[0.0, 1.0], [0.0, 0.0]]),
+                "advantages": torch.tensor([[0.2, 0.4], [-0.1, 0.0]]),
+                "step_rewards": torch.tensor([0.75, -0.25]),
+            }
+            self.non_tensor_batch = {
+                "traj_uid": np.array(["trace", "trace"], dtype=object),
+                "turn_index": np.array([0, 0]),
+                "task_uid": np.array(["task", "task"], dtype=object),
+                "episode_success": np.array([True, True]),
+            }
+
+        def __len__(self):
+            return 2
+
+    tokenizer = SimpleNamespace(
+        batch_decode=lambda values, skip_special_tokens: ["decoded"] * len(values)
+    )
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        dump_training_transitions(Batch(), tokenizer, root / "rollouts", 1)
+        rows = [
+            json.loads(line)
+            for line in (root / "rollouts" / "1.jsonl").read_text().splitlines()
+        ]
+        assert abs(rows[0]["advantage"] - 0.3) < 1e-6
+        assert rows[0]["step_reward"] == 0.75
+        assert [row["padding_duplicate"] for row in rows] == [False, True]
+
+        metrics_path = root / "metrics.jsonl"
+        with patch.dict(os.environ, {"VERL_METRICS_FILE": str(metrics_path)}):
+            LocalLogger().log({"loss": np.float32(1.5), "text": "ignored"}, 7)
+        metrics = json.loads(metrics_path.read_text())
+        assert metrics["step"] == 7 and metrics["loss"] == 1.5
+        assert "time_unix" in metrics and "text" not in metrics
 def main():
     check_formal_config()
     check_eval_task_assignment()
@@ -340,6 +383,7 @@ def main():
     check_persistent_rollout()
     check_validation_panels()
     check_evaluator_summary()
+    check_training_artifacts()
     print("Jev process-reward integration check passed")
 
 

@@ -102,7 +102,6 @@ PY
             for milestone in "${suite_milestones[@]}"; do
                 for arm_index in "${!algos[@]}"; do
                     selected_arm=${algos[$arm_index]}
-                    selected_gpus=${suite_gpus[$((arm_index * 2))]},${suite_gpus[$((arm_index * 2 + 1))]}
                     run_name=${suite_tag}-${selected_arm}-seed${selected_seed}
                     run_dir=$project/runs/grpo-alfworld-$run_name
                     checkpoint=$run_dir/checkpoints/global_step_$milestone
@@ -120,6 +119,8 @@ PY
                         echo "actor checkpoint missing: $checkpoint" >&2
                         exit 2
                     }
+                    slot=$((${#pids[@]} * 2))
+                    selected_gpus=${suite_gpus[$slot]},${suite_gpus[$((slot + 1))]}
                     printf 'starting evaluation arm=%s seed=%s step=%s gpus=%s\n' \
                         "$selected_arm" "$selected_seed" "$milestone" "$selected_gpus"
                     CUDA_VISIBLE_DEVICES=$selected_gpus \
@@ -128,6 +129,9 @@ PY
                             --config "$run_dir/experiment-config.yaml" &
                     pids+=("$!")
                     names+=("$selected_arm@step$milestone")
+                    if (( ${#pids[@]} == 4 )); then
+                        wait_for_jobs || exit 1
+                    fi
                 done
                 ((${#pids[@]} == 0)) || wait_for_jobs || exit 1
             done
