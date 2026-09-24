@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-arm=${1:?usage: run_grpo_alfworld.sh baseline|jev RUN_TAG}
-run_tag=${2:?usage: run_grpo_alfworld.sh baseline|jev RUN_TAG}
+usage='usage: run_grpo_alfworld.sh baseline|jev RUN_TAG SEED [off|on]'
+arm=${1:?$usage}
+run_tag=${2:?$usage}
+seed=${3:?$usage}
+shaping_mode=${4:-}
 [[ $arm == baseline || $arm == jev ]] || { echo 'arm must be baseline or jev' >&2; exit 2; }
 [[ $run_tag =~ ^[a-zA-Z0-9_-]+$ ]] || { echo 'invalid run tag' >&2; exit 2; }
 [[ ${CUDA_VISIBLE_DEVICES:-} =~ ^([0-9]+,){1,3}[0-9]+$ ]] || { echo 'set CUDA_VISIBLE_DEVICES to two or four GPU indices' >&2; exit 2; }
@@ -12,21 +15,133 @@ gpu_count=${#cuda_devices[@]}
 [[ $(printf '%s\n' "${cuda_devices[@]}" | sort -u | wc -l) -eq $gpu_count ]] || { echo 'GPU indices must be unique' >&2; exit 2; }
 
 root=/home/JJ_Group/lih2511
-repo=$root/test/jev/verl-agent
-model_path=${MODEL_PATH:-$root/.cache/huggingface/hub/Qwen3-1.7B}
+project=$root/test/jev
+repo=$project/verl-agent
+python=$root/.conda/envs/verl/bin/python
+config_path=${CONFIG_PATH:-$project/config/config..yaml}
+[[ -f $config_path ]] || { echo "config missing: $config_path" >&2; exit 2; }
+
+config_output=$(
+    "$python" - "$config_path" "$seed" "$shaping_mode" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+import yaml
+
+path, selected_seed, selected_mode = sys.argv[1:]
+config = yaml.safe_load(Path(path).read_text())
+if not isinstance(config, dict) or config.get("version") != 1:
+    raise SystemExit("config version must be 1")
+
+def positive(section, key):
+    value = section.get(key)
+    if type(value) is not int or value <= 0:
+        raise SystemExit(f"{key} must be a positive integer")
+    return value
+
+training = config.get("training", {})
+groups = positive(training, "task_groups_per_update")
+rollouts = positive(training, "rollouts_per_group")
+max_steps = positive(training, "max_steps")
+history_length = training.get("history_length")
+if type(history_length) is not int or history_length < 0:
+    raise SystemExit("history_length must be a nonnegative integer")
+updates = positive(training, "updates")
+seeds = training.get("paired_seeds")
+if not isinstance(seeds, list) or len(seeds) != 3 or len(set(seeds)) != 3:
+    raise SystemExit("paired_seeds must contain three distinct seeds")
+if any(type(value) is not int or value <= 0 for value in seeds):
+    raise SystemExit("paired_seeds must be positive integers and exclude seed 0")
+try:
+    selected_seed = int(selected_seed)
+except ValueError as error:
+    raise SystemExit("SEED must be an integer") from error
+if selected_seed not in seeds:
+    raise SystemExit(f"SEED must be one of {seeds}")
+
+evaluation = config.get("evaluation", {})
+panel_size = positive(evaluation, "tasks_per_panel")
+eval_seed = evaluation.get("seed")
+if type(eval_seed) is not int or eval_seed < 0:
+    raise SystemExit("evaluation.seed must be a nonnegative integer")
+panels = evaluation.get("panels")
+expected_panels = {
+    "valid_seen": "eval_in_distribution",
+    "valid_unseen": "eval_out_of_distribution",
+}
+if panels != expected_panels:
+    raise SystemExit(f"evaluation.panels must be {expected_panels}")
+milestones = evaluation.get("milestones")
+if (
+    not isinstance(milestones, list)
+    or any(type(value) is not int for value in milestones)
+    or milestones != sorted(set(milestones))
+    or not milestones
+    or milestones[0] != 0
+    or milestones[-1] != updates
+):
+    raise SystemExit("milestones must be sorted, unique, start at 0, and end at updates")
+
+shaping = config.get("invalid_action_shaping", {})
+modes = shaping.get("modes")
+if modes != {"off": False, "on": True}:
+    raise SystemExit("invalid_action_shaping.modes must define off=false and on=true")
+selected_mode = selected_mode or shaping.get("default", "")
+if selected_mode not in modes:
+    raise SystemExit("invalid-action shaping mode must be off or on")
+coefficient = shaping.get("coefficient")
+if type(coefficient) not in (int, float) or coefficient < 0:
+    raise SystemExit("invalid-action shaping coefficient must be nonnegative")
+
+model_path = config.get("policy", {}).get("model_path")
+if not isinstance(model_path, str) or not model_path.startswith("/"):
+    raise SystemExit("policy.model_path must be absolute")
+
+values = [
+    model_path, groups, rollouts, max_steps, history_length, updates,
+    panel_size, eval_seed, json.dumps(panels, separators=(",", ":")),
+    json.dumps(milestones, separators=(",", ":")), len(milestones),
+    selected_mode, str(modes[selected_mode]).lower(), coefficient,
+]
+print("\n".join(map(str, values)))
+PY
+)
+mapfile -t config_values <<< "$config_output"
+(( ${#config_values[@]} == 14 )) || { echo 'config parser returned incomplete data' >&2; exit 2; }
+model_path=${config_values[0]}
+train_batch_size=${config_values[1]}
+rollouts_per_group=${config_values[2]}
+max_steps=${config_values[3]}
+history_length=${config_values[4]}
+updates=${config_values[5]}
+val_batch_size=${config_values[6]}
+eval_seed=${config_values[7]}
+eval_panels=${config_values[8]}
+milestones=${config_values[9]}
+milestone_count=${config_values[10]}
+shaping_mode=${config_values[11]}
+invalid_action_shaping=${config_values[12]}
+invalid_action_penalty=${config_values[13]}
 [[ -f $model_path/config.json ]] || { echo "model config missing: $model_path" >&2; exit 2; }
-run_dir=$root/test/jev/runs/grpo-alfworld-$run_tag
+run_dir=$project/runs/grpo-alfworld-$run_tag
 resume_mode=${RESUME_MODE:-disable}
 [[ $resume_mode == disable || $resume_mode == auto || $resume_mode == resume_path ]] || { echo 'invalid RESUME_MODE' >&2; exit 2; }
 if [[ $resume_mode == disable ]]; then
     [[ ! -e $run_dir ]] || { echo "run directory exists: $run_dir" >&2; exit 2; }
     mkdir -p "$run_dir"
+    cp "$config_path" "$run_dir/experiment-config.yaml"
+    printf 'seed=%s\ninvalid_action_shaping=%s\n' "$seed" "$shaping_mode" > "$run_dir/run-selection.txt"
 else
     [[ -d $run_dir ]] || { echo "resume run directory missing: $run_dir" >&2; exit 2; }
+    cmp -s "$config_path" "$run_dir/experiment-config.yaml" || { echo 'config differs from the original run' >&2; exit 2; }
+    [[ $(<"$run_dir/run-selection.txt") == $(printf 'seed=%s\ninvalid_action_shaping=%s' "$seed" "$shaping_mode") ]] || {
+        echo 'seed or shaping mode differs from the original run' >&2; exit 2;
+    }
 fi
 
 export ALFWORLD_DATA=$root/.cache/alfworld
-export PYTHONPATH=$root/test/jev:$repo${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$project/src:$repo${PYTHONPATH:+:$PYTHONPATH}
 export PATH=$root/.conda/envs/verl/bin:$PATH
 python_flags=()
 if [[ ${PYTHON_NO_SITE:-false} == true ]]; then
@@ -60,20 +175,6 @@ if [[ $arm == jev ]]; then
 else
     adv_estimator=grpo
     jev_process_reward=false
-fi
-updates=${TRAIN_UPDATES:-1}
-max_steps=${MAX_STEPS:-10}
-train_batch_size=${TRAIN_BATCH_SIZE:-4}
-[[ $train_batch_size =~ ^[1-9][0-9]*$ ]] || { echo 'TRAIN_BATCH_SIZE must be a positive integer' >&2; exit 2; }
-val_batch_size=${VAL_BATCH_SIZE:-64}
-[[ $val_batch_size =~ ^[1-9][0-9]*$ ]] || { echo 'VAL_BATCH_SIZE must be a positive integer' >&2; exit 2; }
-test_freq=${TEST_FREQ:-1}
-save_freq=${SAVE_FREQ:--1}
-val_before_train=${VAL_BEFORE_TRAIN:-true}
-[[ $val_before_train == true || $val_before_train == false ]] || { echo 'VAL_BEFORE_TRAIN must be true or false' >&2; exit 2; }
-if [[ $val_before_train == false && $test_freq == -1 && -z ${VAL_BATCH_SIZE+x} ]]; then
-    # ponytail: the trainer still creates validation actors when validation is disabled; one suffices.
-    val_batch_size=1
 fi
 optimizer_offload=${OPTIMIZER_OFFLOAD:-true}
 [[ $optimizer_offload == true || $optimizer_offload == false ]] || { echo 'OPTIMIZER_OFFLOAD must be true or false' >&2; exit 2; }
@@ -110,15 +211,10 @@ if [[ $model_shm == true ]]; then
     model_path=$model_cache
 fi
 rollout_gpu_util=${ROLLOUT_GPU_UTIL:-0.40}
-ray_num_cpus=${RAY_NUM_CPUS:-16}
+ray_num_cpus=${RAY_NUM_CPUS:-32}
 [[ $ray_num_cpus =~ ^[1-9][0-9]*$ ]] || { echo 'RAY_NUM_CPUS must be a positive integer' >&2; exit 2; }
-seed=${SEED:-0}
-[[ $seed =~ ^[0-9]+$ ]] || { echo 'SEED must be a nonnegative integer' >&2; exit 2; }
-eval_split=${EVAL_SPLIT:-eval_in_distribution}
-[[ $eval_split == eval_in_distribution || $eval_split == eval_out_of_distribution ]] || { echo 'invalid EVAL_SPLIT' >&2; exit 2; }
 
 cd "$repo"
-# ponytail: 8/64 local prompts need no loader pool; revisit for much larger datasets.
 exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.main_ppo \
     algorithm.adv_estimator="$adv_estimator" +algorithm.grpo_cross_steps=false \
     data.train_files="$root/data/verl-agent/text/train.parquet" \
@@ -150,21 +246,24 @@ exec "$root/.conda/envs/verl/bin/python" "${python_flags[@]}" -m verl.trainer.ma
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu="$log_prob_micro_batch" \
     actor_rollout_ref.ref.fsdp_config.param_offload="$ref_param_offload" \
-    actor_rollout_ref.actor.use_invalid_action_penalty=false \
+    actor_rollout_ref.actor.use_invalid_action_penalty="$invalid_action_shaping" \
+    actor_rollout_ref.actor.invalid_action_penalty_coef="$invalid_action_penalty" \
     algorithm.use_kl_in_reward=false \
     env.env_name=alfworld/AlfredTWEnv env.seed="$seed" \
-    env.history_length=2 env.max_steps="$max_steps" env.rollout.n=4 \
-    env.alfworld.eval_dataset="$eval_split" \
+    env.history_length="$history_length" env.max_steps="$max_steps" env.rollout.n="$rollouts_per_group" \
+    +env.alfworld.eval_panels="$eval_panels" +env.alfworld.eval_seed="$eval_seed" \
     +env.alfworld.no_thinking=true \
     +env.alfworld.jev_process_reward="$jev_process_reward" \
     +env.alfworld.jev_log_path="$run_dir/jev-process.jsonl" \
     env.resources_per_worker.num_cpus=0.1 ray_init.num_cpus="$ray_num_cpus" +ray_init.address=local +ray_init.include_dashboard=false \
     trainer.logger='["console"]' trainer.project_name=jev_alfworld \
     trainer.experiment_name="$run_tag" trainer.n_gpus_per_node="$gpu_count" trainer.nnodes=1 \
-    trainer.save_freq="$save_freq" trainer.test_freq="$test_freq" \
-    trainer.max_actor_ckpt_to_keep=2 \
+    trainer.save_freq=-1 trainer.test_freq=-1 trainer.val_before_train=false \
+    +trainer.checkpoint_steps="$milestones" +trainer.eval_steps="$milestones" \
+    trainer.max_actor_ckpt_to_keep="$milestone_count" \
     trainer.total_epochs="$updates" trainer.total_training_steps="$updates" \
-    trainer.val_before_train="$val_before_train" trainer.resume_mode="$resume_mode" \
+    trainer.resume_mode="$resume_mode" \
     trainer.resume_from_path="${RESUME_FROM_PATH:-null}" \
     trainer.rollout_data_dir="$run_dir/rollouts" \
+    trainer.validation_data_dir="$run_dir/evaluations" \
     trainer.default_local_dir="$run_dir/checkpoints"

@@ -20,8 +20,8 @@ evaluation:
   milestones: [0, 10, 40, 80, 150]
 
 invalid_action_shaping:
-  default: off
+  default: "off"
   coefficient: 0.1
   modes:
-    off: false
-    on: true
+    "off": false
+    "on": true
