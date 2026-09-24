@@ -44,6 +44,9 @@ def check_formal_config():
         "valid_unseen": "eval_out_of_distribution",
     }
     assert training["invalid_action_shaping"] is False
+    assert config["data"]["shuffle"] is False
+    assert config["data"]["truncation"] == "left"
+    assert config["generation"]["enable_thinking"] is False
     assert config["generation"]["evaluation"] == {
         "temperature": 0.0,
         "top_p": 1.0,
@@ -52,6 +55,7 @@ def check_formal_config():
     }
     assert config["optimization"]["learning_rate"] > 0
     assert config["optimization"]["ppo_mini_batch_size"] > 0
+    assert config["optimization"]["use_kl_in_reward"] is False
     assert sum(
         parquet.read_metadata(path).num_rows for path in config["data"]["train_files"]
     ) == training["tasks"]
