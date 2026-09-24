@@ -317,11 +317,14 @@ def check_evaluator_summary():
         raw_path = root / "0.jsonl"
         rows = [
             {"traj_uid": "a", "task_uid": "task-a", "turn_index": 0,
-             "score": 1, "is_action_valid": True},
+             "score": 1, "is_action_valid": True, "prompt_tokens": 4,
+             "response_tokens": 2},
             {"traj_uid": "a", "task_uid": "task-a", "turn_index": 1,
-             "score": 1, "is_action_valid": True},
+             "score": 1, "is_action_valid": True, "prompt_tokens": 6,
+             "response_tokens": 3},
             {"traj_uid": "b", "task_uid": "task-b", "turn_index": 0,
-             "score": 0, "is_action_valid": False},
+             "score": 0, "is_action_valid": False, "prompt_tokens": 5,
+             "response_tokens": 1},
         ]
         raw_path.write_text("".join(json.dumps(row) + "\n" for row in rows))
         summary = aggregate_panel(raw_path, root / "tasks-0.jsonl")
@@ -330,6 +333,7 @@ def check_evaluator_summary():
         assert summary["success_rate"] == 0.5
         assert summary["transitions"] == 3
         assert summary["valid_action_rate"] == 2 / 3
+        assert summary["total_tokens"] == 21
 
 
 def check_training_artifacts():

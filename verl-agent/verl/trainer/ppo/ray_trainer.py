@@ -823,7 +823,9 @@ class RayPPOTrainer:
             prompt_tokens = test_output_gen_batch.batch["attention_mask"][
                 :, :prompt_length
             ].sum(-1).cpu().tolist()
-            response_tokens = test_output_gen_batch.batch["response_mask"].sum(-1).cpu().tolist()
+            response_tokens = test_output_gen_batch.batch["attention_mask"][
+                :, -output_ids.shape[-1]:
+            ].sum(-1).cpu().tolist()
             sample_extra_infos["prompt_tokens"].extend(prompt_tokens)
             sample_extra_infos["response_tokens"].extend(response_tokens)
             sample_extra_infos["total_tokens"].extend(
