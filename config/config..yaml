@@ -1,0 +1,27 @@
+version: 1
+
+policy:
+  model_path: /home/JJ_Group/lih2511/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+
+training:
+  task_groups_per_update: 16
+  rollouts_per_group: 8
+  max_steps: 50
+  history_length: 2
+  updates: 150
+  paired_seeds: [1, 2, 3]
+
+evaluation:
+  tasks_per_panel: 128
+  seed: 1000
+  panels:
+    valid_seen: eval_in_distribution
+    valid_unseen: eval_out_of_distribution
+  milestones: [0, 10, 40, 80, 150]
+
+invalid_action_shaping:
+  default: off
+  coefficient: 0.1
+  modes:
+    off: false
+    on: true
