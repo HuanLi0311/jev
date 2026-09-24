@@ -33,16 +33,25 @@ def validate_slot_files(paths: list[str], expected: int, split: str) -> None:
     resolved = [str(Path(path).resolve()) for path in paths]
     if not resolved or len(resolved) != len(set(resolved)):
         raise ValueError(f"{split} parquet paths must be nonempty and unique")
+    if any(not Path(path).is_file() for path in resolved):
+        raise ValueError(f"{split} parquet path does not exist")
     rows = [
         row
         for path in resolved
         for row in parquet.read_table(path).to_pylist()
     ]
-    slots = [row.get("extra_info", {}).get("slot") for row in rows]
+    infos = [row.get("extra_info") for row in rows]
+    slots = [info.get("slot") if isinstance(info, dict) else None for info in infos]
     if len(rows) != expected or None in slots or len(set(slots)) != expected:
         raise ValueError(f"{split} parquet must contain {expected} unique slot IDs")
     if any(row.get("data_source") != "alfworld" for row in rows):
         raise ValueError(f"{split} parquet data_source must be alfworld")
+    expected_split = "train" if split == "training" else "evaluation"
+    if any(info.get("split") != expected_split for info in infos):
+        raise ValueError(f"{split} parquet split must be {expected_split}")
+    prompt = [{"role": "user", "content": ""}]
+    if any(row.get("prompt") != prompt for row in rows):
+        raise ValueError(f"{split} parquet contains a non-placeholder prompt")
 
 
 def parse_args() -> argparse.Namespace:

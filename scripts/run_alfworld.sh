@@ -32,6 +32,7 @@ import json
 import sys
 from pathlib import Path
 
+import pyarrow.parquet as parquet
 import yaml
 
 path, selected_seed = sys.argv[1:]
@@ -126,6 +127,32 @@ validation_files = data.get("validation_files")
 for name, paths in (("train_files", train_files), ("validation_files", validation_files)):
     if not isinstance(paths, list) or not paths or any(not Path(item).is_file() for item in paths):
         raise SystemExit(f"data.{name} must contain existing files")
+
+
+def validate_slots(name, paths, expected, split):
+    resolved = [str(Path(item).resolve()) for item in paths]
+    if len(resolved) != len(set(resolved)):
+        raise SystemExit(f"data.{name} contains duplicate parquet paths")
+    rows = [
+        row
+        for item in resolved
+        for row in parquet.read_table(item).to_pylist()
+    ]
+    infos = [row.get("extra_info") for row in rows]
+    slots = [info.get("slot") if isinstance(info, dict) else None for info in infos]
+    if len(rows) != expected or None in slots or len(set(slots)) != expected:
+        raise SystemExit(f"data.{name} must contain {expected} unique slot IDs")
+    if any(row.get("data_source") != "alfworld" for row in rows):
+        raise SystemExit(f"data.{name} data_source must be alfworld")
+    if any(info.get("split") != split for info in infos):
+        raise SystemExit(f"data.{name} split must be {split}")
+    prompt = [{"role": "user", "content": ""}]
+    if any(row.get("prompt") != prompt for row in rows):
+        raise SystemExit(f"data.{name} contains a non-placeholder prompt")
+
+
+validate_slots("train_files", train_files, groups, "train")
+validate_slots("validation_files", validation_files, panel_size, "evaluation")
 data_shuffle = boolean(data, "shuffle")
 filter_overlong_prompts = boolean(data, "filter_overlong_prompts")
 truncation = data.get("truncation")
