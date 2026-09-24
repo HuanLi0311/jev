@@ -130,3 +130,22 @@ from GRPO training is not part of this frozen offline comparison.
 The ICML 2026 paper draft and official template are in `../../dllm/assets/icml_1/`.
 Offline annotation can establish only process-credit measurement quality;
 policy improvement requires the later matched GRPO training experiment.
+
+## V4 online efficiency checks
+
+Use `run_grpo_alfworld.sh` for one-update timing checks before a full run. Set
+`TRAIN_UPDATES=1 MAX_STEPS=10 VAL_BEFORE_TRAIN=false TEST_FREQ=-1 SAVE_FREQ=-1`;
+the launcher then creates only one unused validation actor. Compare
+`timing_s/gen`, `timing_s/update_actor`, `timing_s/step`, rollout tokens, and GPU
+memory/utilization after the first training step. Run artifacts stay under
+`runs/grpo-alfworld-RUN_TAG/`.
+
+For the four-GPU V4 Qwen2.5-1.5B pilot, the measured faster settings are
+`ACTOR_MICRO_BATCH=2`, `LOG_PROB_MICRO_BATCH=4`, `REF_PARAM_OFFLOAD=false`,
+`OPTIMIZER_OFFLOAD=false`, and `PERSISTENT_ROLLOUT=true`. The persistent rollout keeps
+vLLM weights resident across ALFWorld turns and releases them before the actor
+update. `MODEL_SHM=true` stages a model snapshot once under `/dev/shm/verl-cache`;
+`STDLIB_SHM=true` stages the small Python standard library to avoid intermittent
+Ray worker import failures on the shared filesystem. Both caches are optional.
+Use the same settings as an H200 starting point, then remeasure the batch and
+microbatch limits on that node.
