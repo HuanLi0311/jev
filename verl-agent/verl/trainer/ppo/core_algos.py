@@ -182,6 +182,8 @@ def compute_jev_step_grpo_advantage(
     index: np.ndarray,
     traj_index: np.ndarray,
     turn_index: np.ndarray,
+    action_valids: np.ndarray = None,
+    invalid_action_penalty: float = 0.0,
     epsilon: float = 1e-6,
 ):
     """Use confidence-weighted continuous Jev scores as per-turn advantages.
@@ -189,7 +191,8 @@ def compute_jev_step_grpo_advantage(
     A_jev = confidence * (2 * score - 1). The verified outcome conditions
     Jev's retrospective score but is not added again as a separate advantage.
     Values are deliberately not standardized because magnitude carries
-    confidence.
+    confidence. An explicitly enabled invalid-action ablation subtracts its
+    configured penalty from the affected turn only.
     """
     outcomes = token_level_rewards.sum(dim=-1).detach().cpu().numpy()
     scores = np.asarray([
@@ -206,8 +209,23 @@ def compute_jev_step_grpo_advantage(
         (confidence_values < 0) | (confidence_values > 1)
     ):
         raise ValueError("Jev confidences must be finite and in [0, 1]")
+    if not np.isfinite(invalid_action_penalty) or invalid_action_penalty < 0:
+        raise ValueError("invalid-action penalty must be finite and nonnegative")
+    if action_valids is None:
+        valid_values = np.ones(len(scores), dtype=np.float64)
+    else:
+        valid_values = np.asarray([
+            float(np.asarray(value).reshape(-1)[0]) for value in action_valids
+        ], dtype=np.float64)
+        if len(valid_values) != len(outcomes):
+            raise ValueError("action validity must align with the batch")
+        if not np.isfinite(valid_values).all() or np.any(
+            (valid_values != 0) & (valid_values != 1)
+        ):
+            raise ValueError("action validity must be binary")
 
-    jev_values = confidence_values * (2 * scores - 1)
+    shaping_values = invalid_action_penalty * (1 - valid_values)
+    jev_values = confidence_values * (2 * scores - 1) - shaping_values
     jev_tensor = torch.as_tensor(
         jev_values, dtype=torch.float32, device=response_mask.device
     ).unsqueeze(-1) * response_mask
@@ -223,6 +241,7 @@ def compute_jev_step_grpo_advantage(
             if (
                 abs(previous["score"] - scores[batch_idx]) > epsilon
                 or abs(previous["confidence"] - confidence_values[batch_idx]) > epsilon
+                or abs(previous["valid"] - valid_values[batch_idx]) > epsilon
                 or abs(previous["outcome"] - outcome) > epsilon
             ):
                 raise ValueError("duplicate trajectory turn has inconsistent rewards")
@@ -231,6 +250,7 @@ def compute_jev_step_grpo_advantage(
             "task": key[0], "traj": key[1], "turn": key[2],
             "score": scores[batch_idx],
             "confidence": confidence_values[batch_idx],
+            "valid": valid_values[batch_idx],
             "jev_advantage": jev_values[batch_idx],
             "outcome": outcome,
         }
@@ -280,6 +300,8 @@ def compute_jev_step_grpo_advantage(
         "mean_effect_score": float(scores.mean()) if len(scores) else 0.0,
         "mean_confidence": float(confidence_values.mean()) if len(confidence_values) else 0.0,
         "mean_abs_jev_advantage": float(np.abs(jev_values).mean()) if len(jev_values) else 0.0,
+        "invalid_action_fraction": float((1 - valid_values).mean()) if len(valid_values) else 0.0,
+        "mean_invalid_action_penalty": float(shaping_values.mean()) if len(shaping_values) else 0.0,
     }
     return jev_tensor, jev_tensor, stats
 
