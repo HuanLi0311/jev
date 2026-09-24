@@ -268,17 +268,22 @@ Public code is necessary but not sufficient for the controlled table: a method
 must also support the same environment, policy checkpoint, and transition
 budget without reproducing an entire incompatible training pipeline. The first
 external extension, after the five local arms pass the common harness, is CAPO
-(the repository formerly named StepPO). It provides public action-level credit
-and policy-update code for ALFWorld and WebShop, but requires a separate pinned
-checkout and compatibility smoke test. Do not clone it until the local harness
-is frozen.
+([public repository](https://github.com/AgentR1/CAPO), formerly named StepPO).
+It provides public action-level credit and policy-update code for ALFWorld and
+WebShop, but requires a separate pinned checkout and compatibility smoke test.
+Do not clone it until the local harness is frozen.
 
 Other public systems remain separate system-level comparisons rather than main
-table arms. SDAR/RetireOPD and GRSD add self-distillation or multi-stage teacher
-pipelines; SPA-RL and AgentPRM require SFT plus a learned progress/reward model;
-T2PO changes exploration; and IGPO/TIPS assume search tasks with a gold-answer
-likelihood. Comparing any of them requires its native model and total-compute
-accounting, not silently porting one formula into the ALFWorld harness.
+table arms. [SDAR/RetireOPD](https://github.com/ZJU-REAL/SDAR) and
+[GRSD](https://github.com/BinbZheng1/GRSD) add self-distillation or multi-stage
+teacher pipelines; [SPA-RL](https://github.com/WangHanLinHenry/SPA-RL-Agent)
+and [AgentPRM](https://github.com/sanjibanc/agent_prm) require SFT plus a learned
+progress/reward model; [T2PO](https://github.com/WillDreamer/T2PO) changes
+exploration; and [IGPO](https://github.com/GuoqingWang1/IGPO) and
+[TIPS](https://github.com/ucsd-wang-lab-lm/tips) assume search tasks with a
+gold-answer likelihood. Comparing any of them requires its native model and
+total-compute accounting, not silently porting one formula into the ALFWorld
+harness.
 
 Qwen2.5-1.5B-Instruct is the sole primary policy model because it is shared by
 all local recipes and the pilot; use the cached revision
