@@ -231,6 +231,89 @@ variant reaches 2/64 at update 5 but does not provide within-trajectory credit.
 Exact artifacts are indexed in
 [`runs/PROCESS_RESULTS.md`](runs/PROCESS_RESULTS.md).
 
+## Formal open-source comparison plan
+
+Decision frozen on 2026-09-24: stop selecting reward variants on seed 0 and
+the repeatedly inspected 64-task `valid_seen` evaluation. The maintained
+method is outcome-conditioned Jev-only credit,
+`A[i,t] = c[i,t] * (2*q[i,t] - 1)`. The existing seed-0 runs and historical
+prefix, outcome-anchor, same-turn, and trajectory-aggregate variants are
+development evidence and ablations, not confirmatory replicates.
+
+Only methods with a public paper and runnable open-source implementation are
+eligible as literature baselines. A locally implemented Qwen judge may be used
+as a mechanism control, but must not be described as a reproduction of an
+unreleased method.
+
+### Algorithm and model matrix
+
+| Priority | Arm | Credit source | Policy base model | Additional model | Local source |
+|---|---|---|---|---|---|
+| Core | Sparse GRPO | binary terminal success, trajectory-level group advantage | Qwen2.5-1.5B-Instruct | none | `verl-agent/` and `scripts/run_grpo_alfworld.sh` |
+| Core | Jev-only (ours) | post-episode `c*(2*q-1)` per action turn | same exact checkpoint | remote `jev-1.13.0` service | current local adaptation |
+| Main baseline | GiGPO | episode groups plus repeated-state step groups | same exact checkpoint | none | `verl-agent/examples/gigpo_trainer/` |
+| Main baseline | HGPO | context-aware hierarchical step groups | same exact checkpoint | none | `verl-agent/recipe/hgpo/` |
+| Main baseline | GraphGPO | rollout state graph and goal-distance step credit | same exact checkpoint | none | `verl-agent/recipe/GraphGPO/` |
+| Mechanism control | Local LLM hindsight judge | same completed public trace and outcome, mapped to turn credit | same exact checkpoint | frozen Qwen3-8B, non-thinking | adapt the existing local judge; not a literature reproduction |
+
+The five algorithm arms form the main open-source comparison. Run the local
+LLM control after the common harness passes because it requires a new online
+adapter. AgentPRM is open source but uses a separately SFT-tuned
+Llama-3.2-3B policy, a trained PRM, OnlineDPO, and patched OpenInstruct/SGLang;
+it is not an algorithm-controlled baseline for this table. HCAPO, TRACE, and
+other methods without public runnable implementations are excluded rather than
+reimplemented from the paper.
+
+Qwen2.5-1.5B-Instruct is the sole primary policy model because it is shared by
+all local recipes and the pilot; use the cached revision
+`989aa7980e4cf806f80c7fef2b1adb7bc71aa306`. A Qwen2.5-7B-Instruct scale check
+is gated on the 1.5B study and requires a new model download. Do not change
+policy size and benchmark in the same experiment.
+
+### Common large ALFWorld setting
+
+The target setting follows the common scale of the public recipes rather than
+shrinking them to the pilot:
+
+- 16 task groups per update and eight rollouts per group;
+- 50 environment steps per trajectory and history length two;
+- 150 matched updates for every arm;
+- three fresh paired training seeds, excluding development seed 0;
+- deterministic checkpoints at updates 0, 10, 40, 80, and 150;
+- a fixed 128-task `valid_seen` panel and a fixed 128-task `valid_unseen`
+  panel, identical across algorithms and training seeds;
+- primary reporting by environment-transition budget: strict success,
+  continuous verifier score, area under the learning curve, per-task paired
+  differences, GPU time, judge calls, labeled transitions, and dollars.
+
+Before the full runs, execute one target-size update for every arm and a
+five-update GRPO/Jev pair. These are infrastructure and cost checks, not model
+selection. If the measured budget must be reduced, reduce it identically for
+all arms and freeze the new budget before inspecting benchmark outcomes.
+
+The controlled main table uses binary terminal success with invalid-action
+shaping disabled for every method. The public GiGPO/HGPO/GraphGPO launchers
+enable a `0.1` invalid-action penalty, but the maintained Jev estimator builds
+its advantages directly from `q` and `c`, so merely enabling the same config
+flag would not apply an equivalent gradient signal. Any official-recipe
+systems comparison with invalid-action shaping must therefore be a separate,
+explicitly labeled experiment rather than mixed into the controlled table.
+
+### Benchmark and repository matrix
+
+| Benchmark | Role | Status | Clone or download required |
+|---|---|---|---|
+| ALFWorld TextWorld | primary online training; fixed ID and OOD evaluation | wrapper and game assets already local | no clone or data download |
+| WebShop | first cross-benchmark extension after ALFWorld replication | source already under `verl-agent/`; data and dedicated environment absent | no clone; run its setup to download the full product data and build the search index |
+| ScienceWorld | completed frozen process-measurement panel | pinned local checkout at `e8216d6...` | none |
+| ToolSandbox | completed frozen process-measurement panel and negative case | pinned local checkout at `c8571d7...` | none |
+
+GRPO, GiGPO, HGPO, and GraphGPO are already present in the locally adapted
+`verl-agent/`; cloning another copy would create version drift. The local
+Qwen2.5-1.5B policy and Qwen3-8B judge weights are also present. The only
+near-term external preparation is the WebShop data/environment setup; the 7B
+scale phase additionally needs Qwen2.5-7B-Instruct weights.
+
 ## Sources and design rationale
 
 - ALFWorld's official configuration defines the `valid_seen` and `valid_unseen` splits, six task types, and a 50-step default evaluation horizon. We use the text environment and start with `valid_unseen`; our pilot caps at 30 steps to control inference cost, and records that cap in the manifest. [Official ALFWorld configuration](https://github.com/alfworld/alfworld/blob/master/configs/base_config.yaml)
