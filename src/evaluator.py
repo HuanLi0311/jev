@@ -11,6 +11,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import sysconfig
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -114,6 +115,13 @@ def runtime_value(config: dict[str, Any], key: str, env_name: str) -> str:
     return str(value).lower() if type(value) is bool else str(value)
 
 
+def environment_bool(name: str) -> bool:
+    value = os.environ.get(name, "false")
+    if value not in {"true", "false"}:
+        raise ValueError(f"{name} must be true or false")
+    return value == "true"
+
+
 def checkpoint_details(value: str, milestones: list[int]) -> tuple[Path | None, int]:
     if value == "base":
         return None, 0
@@ -177,9 +185,11 @@ def build_command(
     panel_override = "{" + ",".join(
         f"{name}:{dataset}" for name, dataset in evaluation["panels"].items()
     ) + "}"
+    python_flags = ["-S"] if environment_bool("PYTHON_NO_SITE") else []
 
     return [
         sys.executable,
+        *python_flags,
         "-m",
         "verl.trainer.main_ppo",
         "algorithm.adv_estimator=grpo",
@@ -354,11 +364,27 @@ def run() -> None:
         "evaluation_seed": config["evaluation"]["seed"],
         "panels": config["evaluation"]["panels"],
         "tasks_per_panel": config["evaluation"]["tasks"],
+        "runtime_environment": {
+            "use_remove_padding": runtime_value(
+                config, "use_remove_padding", "USE_REMOVE_PADDING"
+            ),
+            "python_no_site": environment_bool("PYTHON_NO_SITE"),
+            "stdlib_shm": environment_bool("STDLIB_SHM"),
+        },
         "command": command,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     environment = os.environ.copy()
-    python_paths = [str(PROJECT / "src"), str(REPO)]
+    python_paths = []
+    if environment_bool("STDLIB_SHM"):
+        # ponytail: reuse the launcher's immutable stdlib cache; do not recopy it per eval.
+        stdlib_cache = Path("/dev/shm/jev-python-stdlib")
+        if not (stdlib_cache / ".complete").is_file():
+            raise FileNotFoundError(f"stdlib tmpfs cache is incomplete: {stdlib_cache}")
+        python_paths.append(str(stdlib_cache))
+    if environment_bool("PYTHON_NO_SITE"):
+        python_paths.append(sysconfig.get_path("purelib"))
+    python_paths.extend([str(PROJECT / "src"), str(REPO)])
     if environment.get("PYTHONPATH"):
         python_paths.append(environment["PYTHONPATH"])
     environment.update(
