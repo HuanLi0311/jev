@@ -236,8 +236,8 @@ def check_post_episode_annotation():
             },
         ]]
         rollout_infos = [[
-            {"observation_text": "You enter the kitchen.", "executed_action": "look"},
-            {"observation_text": "You take the apple.", "executed_action": "take apple"},
+            {"observation_text": "You enter the kitchen.", "public_action": "look"},
+            {"observation_text": "You take the apple.", "public_action": "take apple"},
         ]]
 
         def fake_score(key, trajectory):

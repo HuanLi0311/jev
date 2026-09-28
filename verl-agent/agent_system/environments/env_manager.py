@@ -148,7 +148,13 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         return {'text': full_text_obs, 'image': image_obs, 'anchor': text_obs}, infos
     
     def step(self, text_actions: List[str]):
-        actions, valids = self.projection_f(text_actions, self.envs.get_admissible_commands)
+        raw_actions = list(text_actions)
+        action_pools = self.envs.get_admissible_commands
+        admissible = [
+            {str(action).lower() for action in (pool or [])}
+            for pool in action_pools
+        ]
+        actions, valids = self.projection_f(text_actions, action_pools)
         text_obs, image_obs, rewards, dones, infos = self.envs.step(actions)
         self.memory.store({'text_obs': self.pre_text_obs, 'action': actions})
         self.pre_text_obs = text_obs
@@ -160,7 +166,24 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         # add action_valid to infos
         for i, info in enumerate(infos):
             info['is_action_valid'] = to_numpy(valids[i])
-            info['executed_action'] = str(actions[i])
+            raw = raw_actions[i]
+            lowered = raw.lower()
+            start = lowered.find('<action>')
+            has_action_span = (
+                start >= 0
+                and lowered.find('</action>', start + len('<action>')) >= 0
+            )
+            bare_action = lowered.strip().removesuffix('<|im_end|>').strip()
+            executed_action = str(actions[i])
+            contains_format_tags = any(
+                tag in executed_action.lower()
+                for tag in ('<think', '</think', '<action', '</action')
+            )
+            info['public_action'] = (
+                executed_action
+                if (has_action_span or bare_action in admissible[i]) and not contains_format_tags
+                else '[invalid or unparseable action]'
+            )
 
         next_observations = {'text': full_text_obs, 'image': image_obs, 'anchor': text_obs}
         rewards = to_numpy(rewards)

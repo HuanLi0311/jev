@@ -563,7 +563,7 @@ class TrajectoryCollector:
                 'steps': [
                     {
                         'observation': str(row['anchor_obs']),
-                        'action': str(info['executed_action']),
+                        'action': str(info['public_action']),
                         'observed_result': str(info['observation_text']),
                     }
                     for row, info in pairs
