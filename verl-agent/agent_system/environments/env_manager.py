@@ -42,6 +42,24 @@ def set_gamefile(infos, gamefile):
     return infos
 
 
+def public_alfworld_action(raw_action, executed_action, admissible_actions):
+    """Expose the parsed action to judges without leaking the surrounding response."""
+    lowered = str(raw_action).lower()
+    start = lowered.find('<action>')
+    has_action_span = (
+        start >= 0 and lowered.find('</action>', start + len('<action>')) >= 0
+    )
+    bare_action = lowered.strip().removesuffix('<|im_end|>').strip()
+    executed_action = str(executed_action)
+    contains_format_tags = any(
+        tag in executed_action.lower()
+        for tag in ('<think', '</think', '<action', '</action')
+    )
+    if (has_action_span or bare_action in admissible_actions) and not contains_format_tags:
+        return executed_action
+    return '[invalid or unparseable action]'
+
+
 class SearchEnvironmentManager(EnvironmentManagerBase):
     """
     EnvironmentManager for SearchEnv.
@@ -166,23 +184,8 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         # add action_valid to infos
         for i, info in enumerate(infos):
             info['is_action_valid'] = to_numpy(valids[i])
-            raw = raw_actions[i]
-            lowered = raw.lower()
-            start = lowered.find('<action>')
-            has_action_span = (
-                start >= 0
-                and lowered.find('</action>', start + len('<action>')) >= 0
-            )
-            bare_action = lowered.strip().removesuffix('<|im_end|>').strip()
-            executed_action = str(actions[i])
-            contains_format_tags = any(
-                tag in executed_action.lower()
-                for tag in ('<think', '</think', '<action', '</action')
-            )
-            info['public_action'] = (
-                executed_action
-                if (has_action_span or bare_action in admissible[i]) and not contains_format_tags
-                else '[invalid or unparseable action]'
+            info['public_action'] = public_alfworld_action(
+                raw_actions[i], actions[i], admissible[i]
             )
 
         next_observations = {'text': full_text_obs, 'image': image_obs, 'anchor': text_obs}

@@ -17,7 +17,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from evaluator import aggregate_panel
-from agent_system.environments.env_manager import AlfWorldEnvironmentManager
+from agent_system.environments.env_manager import AlfWorldEnvironmentManager, public_alfworld_action
 from agent_system.environments.env_package.alfworld.envs import worker_seed_and_offset
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector, jev_action_token_mask
@@ -139,6 +139,13 @@ def check_action_format():
     assert alfworld_projection(
         ["<action>look</action>"], [["look"]], require_think=True
     )[1] == [0]
+    assert public_alfworld_action(
+        "<think>private plan</think><action>look</action>", "look", {"look"}
+    ) == "look"
+    assert public_alfworld_action("look", "look", {"look"}) == "look"
+    assert public_alfworld_action(
+        "<think>private plan only</think>", "private plan only", {"look"}
+    ) == "[invalid or unparseable action]"
 
     class CharacterTokenizer:
         all_special_ids = [0, 999]
