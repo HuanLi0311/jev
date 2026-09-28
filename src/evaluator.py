@@ -169,6 +169,11 @@ def build_command(
     persistent_rollout = runtime_value(
         config, "persistent_rollout", "PERSISTENT_ROLLOUT"
     )
+    use_remove_padding = runtime_value(
+        config, "use_remove_padding", "USE_REMOVE_PADDING"
+    )
+    if use_remove_padding not in {"true", "false"}:
+        raise ValueError("USE_REMOVE_PADDING must be true or false")
     panel_override = "{" + ",".join(
         f"{name}:{dataset}" for name, dataset in evaluation["panels"].items()
     ) + "}"
@@ -198,7 +203,7 @@ def build_command(
         f"actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu={actor_micro_batch}",
         "actor_rollout_ref.actor.use_kl_loss=false",
         f"actor_rollout_ref.actor.use_torch_compile={bool_text(runtime['use_torch_compile'], 'use_torch_compile')}",
-        f"actor_rollout_ref.model.use_remove_padding={bool_text(runtime['use_remove_padding'], 'use_remove_padding')}",
+        f"actor_rollout_ref.model.use_remove_padding={use_remove_padding}",
         f"actor_rollout_ref.model.enable_gradient_checkpointing={bool_text(runtime['gradient_checkpointing'], 'gradient_checkpointing')}",
         f"actor_rollout_ref.actor.fsdp_config.param_offload={bool_text(runtime['actor_parameter_offload'], 'actor_parameter_offload')}",
         f"actor_rollout_ref.actor.fsdp_config.optimizer_offload={optimizer_offload}",

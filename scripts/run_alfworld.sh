@@ -222,7 +222,8 @@ esac
 optimizer_offload=${OPTIMIZER_OFFLOAD:-${cfg[optimizer_offload]}}
 ref_param_offload=${REF_PARAM_OFFLOAD:-${cfg[reference_parameter_offload]}}
 persistent_rollout=${PERSISTENT_ROLLOUT:-${cfg[persistent_rollout]}}
-for value in "$optimizer_offload" "$ref_param_offload" "$persistent_rollout"; do
+use_remove_padding=${USE_REMOVE_PADDING:-${cfg[use_remove_padding]}}
+for value in "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding"; do
     [[ $value == true || $value == false ]] || { echo 'boolean runtime overrides must be true or false' >&2; exit 2; }
 done
 actor_micro_batch=${ACTOR_MICRO_BATCH:-${cfg[actor_micro_batch_size_per_gpu]}}
@@ -236,10 +237,10 @@ rollout_gpu_util=${ROLLOUT_GPU_UTIL:-${cfg[rollout_gpu_memory_utilization]}}
 [[ $rollout_gpu_util =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]] || { echo 'ROLLOUT_GPU_UTIL must be in [0,1]' >&2; exit 2; }
 
 if [[ ${CHECK_CONFIG_ONLY:-false} == true ]]; then
-    printf 'arm=%s entrypoint=%s seed=%s data_seed=%s rollout_seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s invalid_shaping=%s\n' \
+    printf 'arm=%s entrypoint=%s seed=%s data_seed=%s rollout_seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s invalid_shaping=%s remove_padding=%s\n' \
         "$arm" "$entrypoint" "$seed" "$seed" "$seed" "${cfg[groups]}" "${cfg[rollouts]}" \
         "${cfg[max_steps]}" "${cfg[updates]}" "${cfg[eval_panels]}" "${cfg[milestones]}" \
-        "${cfg[invalid_action_shaping]}"
+        "${cfg[invalid_action_shaping]}" "$use_remove_padding"
     exit 0
 fi
 
@@ -261,7 +262,7 @@ fi
 runtime_selection=$(
     printf 'arm=%s\nseed=%s\ndata_seed=%s\nrollout_seed=%s\nmodel_path=%s\n' "$arm" "$seed" "$seed" "$seed" "$model_path"
     printf 'gpu_count=%s\nactor_micro_batch_size_per_gpu=%s\nlog_prob_micro_batch_size_per_gpu=%s\n' "$gpu_count" "$actor_micro_batch" "$log_prob_micro_batch"
-    printf 'optimizer_offload=%s\nreference_parameter_offload=%s\npersistent_rollout=%s\n' "$optimizer_offload" "$ref_param_offload" "$persistent_rollout"
+    printf 'optimizer_offload=%s\nreference_parameter_offload=%s\npersistent_rollout=%s\nuse_remove_padding=%s\n' "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding"
     printf 'tensor_model_parallel_size=%s\nrollout_gpu_memory_utilization=%s\nray_num_cpus=%s\n' "$tensor_parallel_size" "$rollout_gpu_util" "$ray_num_cpus"
 )
 if [[ $resume_mode == disable ]]; then
@@ -351,7 +352,7 @@ common_args=(
     "actor_rollout_ref.model.path=$model_path"
     "actor_rollout_ref.actor.optim.lr=${cfg[learning_rate]}"
     "actor_rollout_ref.actor.use_torch_compile=${cfg[use_torch_compile]}"
-    "actor_rollout_ref.model.use_remove_padding=${cfg[use_remove_padding]}"
+    "actor_rollout_ref.model.use_remove_padding=$use_remove_padding"
     "actor_rollout_ref.actor.ppo_mini_batch_size=${cfg[ppo_mini_batch_size]}"
     "actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=$actor_micro_batch"
     "actor_rollout_ref.actor.use_kl_loss=${cfg[use_kl_loss]}"
