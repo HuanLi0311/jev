@@ -414,13 +414,6 @@ def visualize_complex_graph_hierarchical(
     dpi=150,
     title=None,
 ):
-    # ponytail: plotting is optional; training should not require matplotlib.
-    import matplotlib.cm as cm
-    import matplotlib.colors as mcolors
-    import matplotlib.patches as mpatches
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import FancyArrowPatch
-
     """
     Hierarchical graph visualization ordered by task progress.
 
@@ -429,6 +422,13 @@ def visualize_complex_graph_hierarchical(
     highlight_traj=<uid>  : only the highlighted trajectory's edges are colored (rank within
                             that trajectory's steps); all other edges shown in translucent gray.
     """
+    # ponytail: plotting is optional; training should not require matplotlib.
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyArrowPatch
+
     from collections import defaultdict
 
     if G.shortest_path_to_final is None:
