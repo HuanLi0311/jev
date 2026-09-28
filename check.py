@@ -146,6 +146,9 @@ def check_action_format():
     assert public_alfworld_action(
         "<think>private plan only</think>", "private plan only", {"look"}
     ) == "[invalid or unparseable action]"
+    assert public_alfworld_action(
+        "<think>no command</think><action></action>", "", {"look"}
+    ) == "[invalid or unparseable action]"
 
     class CharacterTokenizer:
         all_special_ids = [0, 999]

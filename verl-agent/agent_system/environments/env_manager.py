@@ -51,6 +51,8 @@ def public_alfworld_action(raw_action, executed_action, admissible_actions):
     )
     bare_action = lowered.strip().removesuffix('<|im_end|>').strip()
     executed_action = str(executed_action)
+    if not executed_action.strip():
+        return '[invalid or unparseable action]'
     contains_format_tags = any(
         tag in executed_action.lower()
         for tag in ('<think', '</think', '<action', '</action')
