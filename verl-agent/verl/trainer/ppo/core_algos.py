@@ -194,9 +194,12 @@ def compute_jev_step_grpo_advantage(
     """
     if action_mask.shape != response_mask.shape:
         raise ValueError("Jev action mask must match the response mask")
-    credit_mask = action_mask.to(device=response_mask.device, dtype=response_mask.dtype) * response_mask
-    if torch.any(credit_mask > response_mask):
+    action_mask = action_mask.to(device=response_mask.device, dtype=response_mask.dtype)
+    if torch.any((action_mask < 0) | (action_mask > 1)):
+        raise ValueError("Jev action mask must be binary")
+    if torch.any(action_mask.bool() & ~response_mask.bool()):
         raise ValueError("Jev action mask must be a subset of the response mask")
+    credit_mask = action_mask * response_mask
     outcomes = token_level_rewards.sum(dim=-1).detach().cpu().numpy()
     scores = np.asarray([
         float(np.asarray(value).reshape(-1)[0]) for value in effect_scores

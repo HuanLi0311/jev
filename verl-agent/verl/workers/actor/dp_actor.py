@@ -379,7 +379,7 @@ class DataParallelPPOActor(BasePPOActor):
                         response_mask = data["loss_mask"][:, -response_length:]
                     else:
                         response_mask = attention_mask[:, -response_length:]
-                    policy_loss_mask = data.get("policy_loss_mask", response_mask)
+                    policy_loss_mask = data["policy_loss_mask"] if "policy_loss_mask" in data else response_mask
 
                     old_log_prob = data["old_log_probs"]
                     advantages = data["advantages"]
