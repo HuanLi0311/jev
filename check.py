@@ -20,7 +20,7 @@ from evaluator import aggregate_panel
 from agent_system.environments.env_manager import AlfWorldEnvironmentManager
 from agent_system.environments.env_package.alfworld.envs import worker_seed_and_offset
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
-from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector
+from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector, jev_action_token_mask
 from score import public_completed_trajectory, questions_for_steps
 from verl.trainer.ppo.artifact_utils import dump_training_transitions
 from verl.trainer.ppo.core_algos import compute_jev_step_grpo_advantage
@@ -140,6 +140,32 @@ def check_action_format():
         ["<action>look</action>"], [["look"]], require_think=True
     )[1] == [0]
 
+    class CharacterTokenizer:
+        all_special_ids = [0, 999]
+
+        def __call__(self, texts, *, add_special_tokens, return_offsets_mapping):
+            assert not add_special_tokens and return_offsets_mapping
+            return {
+                "input_ids": [[ord(char) for char in text] for text in texts],
+                "offset_mapping": [
+                    [(index, index + 1) for index in range(len(text))]
+                    for text in texts
+                ],
+            }
+
+    text = "<think>inspect first</think><action>go left</action>"
+    response_ids = [ord(char) for char in text] + [999, 0]
+    responses = torch.tensor([response_ids])
+    response_mask = torch.tensor([[1] * (len(response_ids) - 1) + [0]])
+    action_mask = jev_action_token_mask(
+        CharacterTokenizer(), responses, response_mask, [text]
+    )
+    assert "".join(
+        chr(token_id)
+        for token_id, selected in zip(response_ids, action_mask[0].tolist(), strict=True)
+        if selected
+    ) == "go left"
+
 
 def check_advantage():
     masks = torch.tensor([
@@ -149,6 +175,11 @@ def check_advantage():
     ])
     kwargs = {
         "response_mask": masks,
+        "action_mask": torch.tensor([
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 1.0],
+        ]),
         "effect_scores": np.array([0.9, 0.5, 0.2], dtype=np.float32),
         "confidences": np.array([0.25, 1.0, 0.5], dtype=np.float32),
         "index": np.array(["task"] * 3),
@@ -159,9 +190,9 @@ def check_advantage():
         token_level_rewards=torch.zeros_like(masks), **kwargs
     )
     expected = torch.tensor([
-        [0.2, 0.2, 0.0],
+        [0.0, 0.2, 0.0],
         [0.0, 0.0, 0.0],
-        [-0.3, -0.3, -0.3],
+        [0.0, -0.3, -0.3],
     ])
     assert torch.allclose(advantages, expected, atol=1e-6)
     assert torch.equal(advantages, returns)
@@ -190,7 +221,7 @@ def check_post_episode_annotation():
             {
                 "active_masks": True,
                 "anchor_obs": "room",
-                "action_text": "look",
+                "action_text": "<think>inspect</think><action>look</action>",
                 "task_uid": "game",
                 "jev_effect_scores": 0.5,
                 "jev_confidences": 0.0,
@@ -198,15 +229,15 @@ def check_post_episode_annotation():
             {
                 "active_masks": True,
                 "anchor_obs": "kitchen",
-                "action_text": "take apple",
+                "action_text": "<think>take it</think><action>take apple</action>",
                 "task_uid": "game",
                 "jev_effect_scores": 0.5,
                 "jev_confidences": 0.0,
             },
         ]]
         rollout_infos = [[
-            {"observation_text": "You enter the kitchen."},
-            {"observation_text": "You take the apple."},
+            {"observation_text": "You enter the kitchen.", "executed_action": "look"},
+            {"observation_text": "You take the apple.", "executed_action": "take apple"},
         ]]
 
         def fake_score(key, trajectory):
@@ -220,6 +251,10 @@ def check_post_episode_annotation():
                 ),
             }
             assert len(trajectory["steps"]) == 2
+            assert [step["action"] for step in trajectory["steps"]] == [
+                "look", "take apple"
+            ]
+            assert "<think>" not in json.dumps(trajectory)
             return {
                 "trajectory_id": trajectory["trajectory_id"],
                 "rubric_version": "test",
