@@ -50,3 +50,7 @@ def test_jev_credit_updates_only_action_content():
     )
     assert torch.count_nonzero(advantages[~action_mask.bool()]) == 0
     assert metrics["transitions_with_action_fraction"] == 1.0
+
+
+if __name__ == "__main__":
+    test_jev_credit_updates_only_action_content()
