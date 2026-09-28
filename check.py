@@ -51,7 +51,7 @@ def check_formal_config():
     assert training["invalid_action_shaping"] is False
     assert config["data"]["shuffle"] is False
     assert config["data"]["truncation"] == "left"
-    assert config["generation"]["max_response_length"] == 512
+    assert config["generation"]["max_response_length"] == 256
     assert config["generation"]["enable_thinking"] is True
     assert config["generation"]["evaluation"] == {
         "temperature": 0.4,
@@ -60,7 +60,7 @@ def check_formal_config():
         "do_sample": True,
     }
     assert config["optimization"]["learning_rate"] > 0
-    assert config["optimization"]["ppo_mini_batch_size"] == 256
+    assert config["optimization"]["ppo_mini_batch_size"] == 16
     assert config["optimization"]["use_kl_in_reward"] is False
     runtime = config["runtime"]
     assert runtime["rollout_gpu_memory_utilization"] == 0.20

@@ -23,12 +23,17 @@ if (( $# == 1 )); then
         esac
         [[ $selected_arm != jev ]] || needs_jev=true
     done
-    [[ ${CUDA_VISIBLE_DEVICES:-} =~ ^([0-9]+,){7}[0-9]+$ ]] || {
-        echo 'suite requires eight GPU indices in CUDA_VISIBLE_DEVICES' >&2
+    [[ ${CUDA_VISIBLE_DEVICES:-} =~ ^([0-9]+,)*[0-9]+$ ]] || {
+        echo 'suite requires comma-separated GPU indices in CUDA_VISIBLE_DEVICES' >&2
         exit 2
     }
     IFS=, read -r -a suite_gpus <<< "$CUDA_VISIBLE_DEVICES"
-    [[ $(printf '%s\n' "${suite_gpus[@]}" | sort -u | wc -l) -eq 8 ]] || {
+    required_gpus=$((${#algos[@]} * 2))
+    (( ${#suite_gpus[@]} == required_gpus )) || {
+        echo "suite requires $required_gpus GPU indices for ${#algos[@]} arms" >&2
+        exit 2
+    }
+    [[ $(printf '%s\n' "${suite_gpus[@]}" | sort -u | wc -l) -eq $required_gpus ]] || {
         echo 'GPU indices must be unique' >&2
         exit 2
     }

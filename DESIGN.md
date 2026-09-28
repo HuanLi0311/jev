@@ -294,38 +294,37 @@ all local recipes and the pilot; use the cached revision
 is gated on the 1.5B study and requires a new model download. Do not change
 policy size and benchmark in the same experiment.
 
-### Common large ALFWorld setting
+### Current small ALFWorld diagnostic
 
-The target setting follows the common scale of the public recipes rather than
-shrinking them to the pilot:
+The current executable stage compares only Jev and GraphGPO at the historical
+pilot scale. It is development evidence, not the confirmatory multi-seed study:
 
-- 16 task groups per update and eight rollouts per group;
-- 50 environment steps per trajectory and history length two;
-- 150 matched updates for every arm;
+- four task groups per update and four rollouts per group;
+- 30 environment steps per trajectory and history length two;
+- 10 matched updates for both arms;
 - one fresh paired training seed `[1]` in the current execution stage, excluding
   development seed 0; this stage does not support multi-seed claims;
-- 512 response tokens, required `<think>...</think><action>...</action>` output,
-  PPO mini-batches of 256, and the shared public-recipe runtime defaults
+- 256 response tokens, required `<think>...</think><action>...</action>` output,
+  PPO mini-batches of 16, and the shared public-recipe runtime defaults
   (tensor parallel two, remove-padding on, chunked prefill/eager/free-cache off);
-- deterministic checkpoints at updates 0, 10, 40, 80, and 150;
-- a fixed 128-task `valid_seen` panel and a fixed 128-task `valid_unseen`
+- deterministic checkpoints at updates 0, 5, and 10;
+- a fixed 64-task `valid_seen` panel and a fixed 64-task `valid_unseen`
   panel, identical across algorithms and training seeds;
 - primary reporting by environment-transition budget: strict success,
   continuous verifier score, area under the learning curve, per-task paired
   differences, GPU time, judge calls, labeled transitions, and dollars.
 
-Before the full runs, execute one target-size update for every arm and a
-five-update GRPO/Jev pair. These are infrastructure and cost checks, not model
-selection. If the measured budget must be reduced, reduce it identically for
-all arms and freeze the new budget before inspecting benchmark outcomes.
+Jev alone uses action-only policy credit while its judge sees only the public
+trajectory. GraphGPO keeps its native policy-loss mask. The repeatedly inspected
+seed-0/64-task result is historical development evidence and is not rerun as a
+confirmatory seed.
 
 `config/config.yaml` is the single executable source for the common scale,
 paired seeds, shared optimization/generation settings, fixed evaluation panels,
 milestone schedule, and policy revision. `scripts/run_alfworld.sh` consumes it,
 records the resolved selection, rejects seed 0, and dispatches the algorithms
 selected by its `algos=(...)` suite list to their existing native trainer
-entrypoints. On the eight-GPU H200 host, a suite assigns two GPUs to each arm
-and runs up to four arms concurrently. It applies each configured seed to the
+entrypoints. A suite assigns two GPUs to each selected arm. It applies each configured seed to the
 environment, dataloader, and vLLM and saves all declared milestone checkpoints.
 Each checkpoint retains the actor training state and dataloader state needed to
 resume. Do not merge the separate trainers into a new framework; they share
@@ -334,12 +333,12 @@ only the artifact writer and record schema.
 All actor checkpoints are evaluated through `src/evaluator.py`, not through
 recipe-specific validation. The evaluator uses the shared actor checkpoint
 format, temperature-0.4 sampling with fixed generation seed 1000, and the same
-128-task `valid_seen` and `valid_unseen` panels. Each panel is one seed-1000
-permutation sampled without replacement, must contain 128 unique environment
+64-task `valid_seen` and `valid_unseen` panels. Each panel is one seed-1000
+permutation sampled without replacement, must contain 64 unique environment
 task IDs, and preserves raw transitions plus per-task records.
 
-After training, the suite evaluates every declared milestone, with the same
-four two-GPU arm pairs running concurrently. A run directory contains the
+After training, the suite evaluates every declared milestone, with the selected
+two-GPU arms running concurrently. A run directory contains the
 frozen config and resolved runtime, `train.log`, numeric update records in
 `metrics.jsonl`, one transition JSONL per update under `rollouts/`, all declared
 `checkpoints/global_step_N/`, and `evaluations/step_N/` with an evaluation log,
