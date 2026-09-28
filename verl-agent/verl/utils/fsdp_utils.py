@@ -193,7 +193,9 @@ def offload_fsdp_optimizer(optimizer):
             state = optimizer.state[param]
             for key, value in state.items():
                 if isinstance(value, torch.Tensor):
-                    state[key] = value.to("cpu", non_blocking=True)
+                    # ponytail: synchronous offload trades overlap for CUDA stability;
+                    # restore async copies only after validating the driver/Torch pair.
+                    state[key] = value.to("cpu")
 
 
 @torch.no_grad()
