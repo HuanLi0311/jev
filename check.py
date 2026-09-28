@@ -151,14 +151,14 @@ def check_action_format():
         all_special_ids = [0, 999]
 
         def __call__(self, texts, *, add_special_tokens, return_offsets_mapping):
-            assert not add_special_tokens and return_offsets_mapping
-            return {
-                "input_ids": [[ord(char) for char in text] for text in texts],
-                "offset_mapping": [
-                    [(index, index + 1) for index in range(len(text))]
-                    for text in texts
-                ],
-            }
+            raise AssertionError("action masking must not retokenize decoded text")
+
+        def batch_decode(self, sequences, *, skip_special_tokens, clean_up_tokenization_spaces):
+            assert skip_special_tokens and not clean_up_tokenization_spaces
+            return [
+                "".join(chr(token_id) for token_id in sequence if token_id not in self.all_special_ids)
+                for sequence in sequences
+            ]
 
     text = "<think>inspect first</think><action>go left</action>"
     response_ids = [ord(char) for char in text] + [999, 0]

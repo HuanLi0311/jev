@@ -41,21 +41,14 @@ def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
     """Mask only text inside the first <action>...</action> span."""
     if len(responses) != len(response_texts):
         raise ValueError("responses and decoded texts must have equal length")
-    encoded = tokenizer(
-        list(response_texts),
-        add_special_tokens=False,
-        return_offsets_mapping=True,
-    )
     special_ids = set(tokenizer.all_special_ids)
     response_ids = responses.detach().cpu().tolist()
     valid_tokens = response_mask.detach().bool().cpu().tolist()
     masks = []
-    for row_ids, row_valid, text, encoded_ids, offsets in zip(
+    for row_ids, row_valid, _text in zip(
         response_ids,
         valid_tokens,
         response_texts,
-        encoded["input_ids"],
-        encoded["offset_mapping"],
         strict=True,
     ):
         token_positions = [
@@ -64,18 +57,25 @@ def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
             if valid and token_id not in special_ids
         ]
         generated_ids = [row_ids[position] for position in token_positions]
-        if generated_ids != encoded_ids:
-            raise ValueError("decoded response does not align with generated token IDs")
+        pieces = tokenizer.batch_decode(
+            [[token_id] for token_id in generated_ids],
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+        decoded = "".join(pieces)
 
         row_mask = [0] * len(row_ids)
-        lower = text.lower()
+        lower = decoded.lower()
         start = lower.find("<action>")
         end = lower.find("</action>", start + len("<action>")) if start >= 0 else -1
         if start >= 0 and end >= 0:
             start += len("<action>")
-            if text[start:end].strip():
-                for position, (token_start, token_end) in zip(token_positions, offsets, strict=True):
-                    if token_start >= start and token_end <= end and token_end > token_start:
+            if decoded[start:end].strip():
+                cursor = 0
+                for position, piece in zip(token_positions, pieces, strict=True):
+                    token_start, token_end = cursor, cursor + len(piece)
+                    cursor = token_end
+                    if token_start < end and token_end > start:
                         row_mask[position] = 1
         masks.append(row_mask)
 
