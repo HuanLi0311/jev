@@ -389,6 +389,9 @@ def run() -> None:
         python_paths.append(environment["PYTHONPATH"])
     environment.update(
         {
+            "PATH": os.pathsep.join(
+                [str(Path(sys.executable).parent), environment.get("PATH", "")]
+            ),
             "PYTHONPATH": os.pathsep.join(python_paths),
             "ALFWORLD_DATA": environment.get(
                 "ALFWORLD_DATA", str(Path.home() / ".cache" / "alfworld")
