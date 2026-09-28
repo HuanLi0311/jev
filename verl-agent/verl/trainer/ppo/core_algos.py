@@ -177,6 +177,7 @@ def compute_grpo_outcome_advantage(
 def compute_jev_step_grpo_advantage(
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
+    action_mask: torch.Tensor,
     effect_scores: np.ndarray,
     confidences: np.ndarray,
     index: np.ndarray,
@@ -188,9 +189,14 @@ def compute_jev_step_grpo_advantage(
 
     A_jev = confidence * (2 * score - 1). The verified outcome conditions
     Jev's retrospective score but is not added again as a separate advantage.
-    Values are deliberately not standardized because magnitude carries
-    confidence.
+    Only environment-facing action tokens receive this credit. Values are
+    deliberately not standardized because magnitude carries confidence.
     """
+    if action_mask.shape != response_mask.shape:
+        raise ValueError("Jev action mask must match the response mask")
+    credit_mask = action_mask.to(device=response_mask.device, dtype=response_mask.dtype) * response_mask
+    if torch.any(credit_mask > response_mask):
+        raise ValueError("Jev action mask must be a subset of the response mask")
     outcomes = token_level_rewards.sum(dim=-1).detach().cpu().numpy()
     scores = np.asarray([
         float(np.asarray(value).reshape(-1)[0]) for value in effect_scores
@@ -209,7 +215,7 @@ def compute_jev_step_grpo_advantage(
     jev_values = confidence_values * (2 * scores - 1)
     jev_tensor = torch.as_tensor(
         jev_values, dtype=torch.float32, device=response_mask.device
-    ).unsqueeze(-1) * response_mask
+    ).unsqueeze(-1) * credit_mask
 
     records = {}
     for batch_idx, (task, traj, turn) in enumerate(
@@ -274,7 +280,13 @@ def compute_jev_step_grpo_advantage(
             if outcome_equivalent_keys else 0.0
         ),
         "mean_abs_advantage": float(
-            jev_tensor.abs().sum() / response_mask.sum().clamp_min(1)
+            jev_tensor.abs().sum() / credit_mask.sum().clamp_min(1)
+        ),
+        "action_token_fraction": float(
+            credit_mask.sum() / response_mask.sum().clamp_min(1)
+        ),
+        "transitions_with_action_fraction": float(
+            (credit_mask.sum(dim=-1) > 0).float().mean()
         ),
         "mean_effect_score": float(scores.mean()) if len(scores) else 0.0,
         "mean_confidence": float(confidence_values.mean()) if len(confidence_values) else 0.0,

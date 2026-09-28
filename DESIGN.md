@@ -1,6 +1,6 @@
 # Jev as a process judge on agent trajectories
 
-Research date: 2026-09-19; updated 2026-09-25
+Research date: 2026-09-19; updated 2026-09-28
 
 ## Question
 
@@ -199,19 +199,22 @@ updates 0, 5, and 10. Sparse RLVR uses standard trajectory-level GRPO on
 actions in trajectory `i`.
 
 The current Jev method labels only after an episode terminates. Jev receives
-the static success criteria, complete public action--observation trace, and
+the static success criteria, complete public parsed-action--observation trace, and
 verified terminal `{reward, success, reward_definition}`. It returns continuous
 effect `q[i,t]` and confidence `c[i,t]` in `[0, 1]` for every transition. Oracle
-state, gold paths, stored process labels, and hidden verifier internals remain
-excluded. Its sole training advantage is
+state, gold paths, stored process labels, hidden verifier internals, raw model
+responses, and `<think>` contents remain excluded. Its sole training advantage is
 
 `A[i,t] = c[i,t] * (2 * q[i,t] - 1)`.
 
 There is no group standardization and no separately added outcome advantage:
 the verified outcome already conditions Jev's retrospective judgment. Only the
-response tokens emitted at turn `t` receive `A[i,t]`; clipped PPO supplies the
-usual importance ratio. Future observations and the terminal outcome are valid
-post-episode labeling context, but are never policy inputs at deployment.
+action-content tokens inside `<action>...</action>` at turn `t` receive
+`A[i,t]`; `<think>` contents, format tags, and EOS receive zero Jev policy
+credit. The shared KL and entropy regularizers still use the complete response
+mask. Clipped PPO supplies the usual importance ratio. Future observations and
+the terminal outcome are valid post-episode labeling context, but are never
+policy inputs at deployment.
 
 The current arm starts from 0/64. Its first batch has 16/16 failures but still
 assigns nonzero, nonconstant turn-level advantages. At update 5 it reaches

@@ -37,6 +37,51 @@ def stable_task_uids(infos, fallback_uids):
     ], dtype=object)
 
 
+def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
+    """Mask only text inside the first <action>...</action> span."""
+    if len(responses) != len(response_texts):
+        raise ValueError("responses and decoded texts must have equal length")
+    encoded = tokenizer(
+        list(response_texts),
+        add_special_tokens=False,
+        return_offsets_mapping=True,
+    )
+    special_ids = set(tokenizer.all_special_ids)
+    response_ids = responses.detach().cpu().tolist()
+    valid_tokens = response_mask.detach().bool().cpu().tolist()
+    masks = []
+    for row_ids, row_valid, text, encoded_ids, offsets in zip(
+        response_ids,
+        valid_tokens,
+        response_texts,
+        encoded["input_ids"],
+        encoded["offset_mapping"],
+        strict=True,
+    ):
+        token_positions = [
+            position
+            for position, (token_id, valid) in enumerate(zip(row_ids, row_valid, strict=True))
+            if valid and token_id not in special_ids
+        ]
+        generated_ids = [row_ids[position] for position in token_positions]
+        if generated_ids != encoded_ids:
+            raise ValueError("decoded response does not align with generated token IDs")
+
+        row_mask = [0] * len(row_ids)
+        lower = text.lower()
+        start = lower.find("<action>")
+        end = lower.find("</action>", start + len("<action>")) if start >= 0 else -1
+        if start >= 0 and end >= 0:
+            start += len("<action>")
+            if text[start:end].strip():
+                for position, (token_start, token_end) in zip(token_positions, offsets, strict=True):
+                    if token_start >= start and token_end <= end and token_end > token_start:
+                        row_mask[position] = 1
+        masks.append(row_mask)
+
+    return torch.as_tensor(masks, dtype=response_mask.dtype, device=response_mask.device)
+
+
 class TrajectoryCollector:
     def __init__(self, config, tokenizer: PreTrainedTokenizer, processor=None):
         """
@@ -395,9 +440,22 @@ class TrajectoryCollector:
 
             batch = batch.union(batch_output)
             
-            text_actions = self.tokenizer.batch_decode(batch.batch['responses'], skip_special_tokens=True)
+            text_actions = self.tokenizer.batch_decode(
+                batch.batch['responses'],
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )
             batch.non_tensor_batch['action_text'] = np.asarray(text_actions, dtype=object)
             batch.non_tensor_batch['turn_index'] = np.full(batch_size, _step, dtype=np.int32)
+            if jev_process_reward:
+                response_length = batch.batch['responses'].size(1)
+                response_mask = batch.batch['attention_mask'][:, -response_length:]
+                batch.batch['jev_action_mask'] = jev_action_token_mask(
+                    self.tokenizer,
+                    batch.batch['responses'],
+                    response_mask,
+                    text_actions,
+                )
             
             next_obs, rewards, dones, infos = envs.step(text_actions)
 
@@ -505,7 +563,7 @@ class TrajectoryCollector:
                 'steps': [
                     {
                         'observation': str(row['anchor_obs']),
-                        'action': str(row['action_text']),
+                        'action': str(info['executed_action']),
                         'observed_result': str(info['observation_text']),
                     }
                     for row, info in pairs

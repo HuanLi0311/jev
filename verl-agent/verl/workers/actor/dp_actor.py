@@ -329,6 +329,8 @@ class DataParallelPPOActor(BasePPOActor):
         multi_turn = data.meta_info.get("multi_turn", False)
 
         select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "old_log_probs", "advantages"]
+        if "policy_loss_mask" in data.batch:
+            select_keys.append("policy_loss_mask")
         if multi_turn:
             select_keys.append("loss_mask")
         if self.config.use_kl_loss:
@@ -377,6 +379,7 @@ class DataParallelPPOActor(BasePPOActor):
                         response_mask = data["loss_mask"][:, -response_length:]
                     else:
                         response_mask = attention_mask[:, -response_length:]
+                    policy_loss_mask = data.get("policy_loss_mask", response_mask)
 
                     old_log_prob = data["old_log_probs"]
                     advantages = data["advantages"]
@@ -406,7 +409,7 @@ class DataParallelPPOActor(BasePPOActor):
                         old_log_prob=old_log_prob,
                         log_prob=log_prob,
                         advantages=advantages,
-                        response_mask=response_mask,
+                        response_mask=policy_loss_mask,
                         cliprange=clip_ratio,
                         cliprange_low=clip_ratio_low,
                         cliprange_high=clip_ratio_high,

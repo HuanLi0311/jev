@@ -385,9 +385,12 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
         data.batch["returns"] = returns
         data.meta_info["ours_metrics"] = ours_metrics
     elif adv_estimator == AdvantageEstimator.JEV_STEP_GRPO:
+        if "jev_action_mask" not in data.batch:
+            raise ValueError("Jev action-only credit requires jev_action_mask")
         advantages, returns, jev_step_metrics = core_algos.compute_jev_step_grpo_advantage(
             token_level_rewards=data.batch["token_level_rewards"],
             response_mask=data.batch["response_mask"],
+            action_mask=data.batch["jev_action_mask"],
             effect_scores=data.non_tensor_batch["jev_effect_scores"],
             confidences=data.non_tensor_batch["jev_confidences"],
             index=data.non_tensor_batch["uid"],
@@ -396,6 +399,7 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
+        data.batch["policy_loss_mask"] = data.batch["jev_action_mask"] * data.batch["response_mask"]
         data.meta_info["jev_step_metrics"] = jev_step_metrics
     else:
         raise NotImplementedError

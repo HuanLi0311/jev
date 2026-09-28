@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
-RUBRIC_VERSION = "jev_hindsight_process_v1"
+RUBRIC_VERSION = "jev_hindsight_action_trace_v2"
 EXPECTED_MODEL = "jev-1.13.0"
 
 
@@ -50,6 +50,14 @@ def _text(value, name):
     return value
 
 
+def _trajectory_action(value, name):
+    action = _text(value, name)
+    lowered = action.lower()
+    if any(tag in lowered for tag in ("<think", "</think", "<action", "</action")):
+        raise ValueError(f"{name} must be an executed action without reasoning or format tags")
+    return action
+
+
 def public_completed_trajectory(trajectory):
     """Whitelist a completed public trace and its intentionally visible outcome."""
     task = _text(trajectory["task"], "task")
@@ -78,7 +86,7 @@ def public_completed_trajectory(trajectory):
         public_step = {
             "step_index": index,
             "observation": _text(step["observation"], f"steps[{index}].observation"),
-            "action": _text(step["action"], f"steps[{index}].action"),
+            "action": _trajectory_action(step["action"], f"steps[{index}].action"),
             "observed_result": _text(step["observed_result"], f"steps[{index}].observed_result"),
         }
         if "done" in step:
@@ -212,6 +220,13 @@ def self_check():
     assert leak not in encoded
     assert state["verified_outcome"]["reward"] == 0.0
     assert state["completed_public_trajectory"][1]["action"] == "look"
+    trajectory["steps"][0]["action"] = "<think>private</think><action>take apple</action>"
+    try:
+        public_completed_trajectory(trajectory)
+    except ValueError as error:
+        assert "without reasoning" in str(error)
+    else:
+        raise AssertionError("chain-of-thought action accepted")
     questions = questions_for_steps(2)
     assert len(questions) == 2 and "failed trajectory may contain useful progress" in questions["step_0000"]["instructions"]
     response = {
