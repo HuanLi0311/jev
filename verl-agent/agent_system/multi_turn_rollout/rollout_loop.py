@@ -75,7 +75,7 @@ def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
                 for position, piece in zip(token_positions, pieces, strict=True):
                     token_start, token_end = cursor, cursor + len(piece)
                     cursor = token_end
-                    if token_start < end and token_end > start:
+                    if token_start >= start and token_end <= end and token_end > token_start:
                         row_mask[position] = 1
         masks.append(row_mask)
 
