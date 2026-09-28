@@ -8,11 +8,6 @@ from verl import DataProto
 # version in verl-agent does not accept episode_advantage_w; these sub-functions do.
 from gigpo.core_gigpo import episode_norm_reward, build_step_group, step_norm_reward
 import networkx as nx
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import matplotlib.cm as cm
-import matplotlib.colors as mcolors
-from matplotlib.patches import FancyArrowPatch
 import time
 
 
@@ -419,6 +414,13 @@ def visualize_complex_graph_hierarchical(
     dpi=150,
     title=None,
 ):
+    # ponytail: plotting is optional; training should not require matplotlib.
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyArrowPatch
+
     """
     Hierarchical graph visualization ordered by task progress.
 
