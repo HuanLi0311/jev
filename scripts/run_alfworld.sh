@@ -223,7 +223,10 @@ optimizer_offload=${OPTIMIZER_OFFLOAD:-${cfg[optimizer_offload]}}
 ref_param_offload=${REF_PARAM_OFFLOAD:-${cfg[reference_parameter_offload]}}
 persistent_rollout=${PERSISTENT_ROLLOUT:-${cfg[persistent_rollout]}}
 use_remove_padding=${USE_REMOVE_PADDING:-${cfg[use_remove_padding]}}
-for value in "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding"; do
+python_no_site=${PYTHON_NO_SITE:-false}
+stdlib_shm=${STDLIB_SHM:-false}
+model_shm=${MODEL_SHM:-false}
+for value in "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding" "$python_no_site" "$stdlib_shm" "$model_shm"; do
     [[ $value == true || $value == false ]] || { echo 'boolean runtime overrides must be true or false' >&2; exit 2; }
 done
 actor_micro_batch=${ACTOR_MICRO_BATCH:-${cfg[actor_micro_batch_size_per_gpu]}}
@@ -237,10 +240,10 @@ rollout_gpu_util=${ROLLOUT_GPU_UTIL:-${cfg[rollout_gpu_memory_utilization]}}
 [[ $rollout_gpu_util =~ ^(0(\.[0-9]+)?|1(\.0+)?)$ ]] || { echo 'ROLLOUT_GPU_UTIL must be in [0,1]' >&2; exit 2; }
 
 if [[ ${CHECK_CONFIG_ONLY:-false} == true ]]; then
-    printf 'arm=%s entrypoint=%s seed=%s data_seed=%s rollout_seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s invalid_shaping=%s remove_padding=%s\n' \
+    printf 'arm=%s entrypoint=%s seed=%s data_seed=%s rollout_seed=%s groups=%s rollouts=%s steps=%s updates=%s panels=%s milestones=%s invalid_shaping=%s remove_padding=%s python_no_site=%s stdlib_shm=%s model_shm=%s\n' \
         "$arm" "$entrypoint" "$seed" "$seed" "$seed" "${cfg[groups]}" "${cfg[rollouts]}" \
         "${cfg[max_steps]}" "${cfg[updates]}" "${cfg[eval_panels]}" "${cfg[milestones]}" \
-        "${cfg[invalid_action_shaping]}" "$use_remove_padding"
+        "${cfg[invalid_action_shaping]}" "$use_remove_padding" "$python_no_site" "$stdlib_shm" "$model_shm"
     exit 0
 fi
 
@@ -264,6 +267,7 @@ runtime_selection=$(
     printf 'gpu_count=%s\nactor_micro_batch_size_per_gpu=%s\nlog_prob_micro_batch_size_per_gpu=%s\n' "$gpu_count" "$actor_micro_batch" "$log_prob_micro_batch"
     printf 'optimizer_offload=%s\nreference_parameter_offload=%s\npersistent_rollout=%s\nuse_remove_padding=%s\n' "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding"
     printf 'tensor_model_parallel_size=%s\nrollout_gpu_memory_utilization=%s\nray_num_cpus=%s\n' "$tensor_parallel_size" "$rollout_gpu_util" "$ray_num_cpus"
+    printf 'python_no_site=%s\nstdlib_shm=%s\nmodel_shm=%s\n' "$python_no_site" "$stdlib_shm" "$model_shm"
 )
 if [[ $resume_mode == disable ]]; then
     printf '%s' "$runtime_selection" > "$run_dir/resolved-runtime.txt"
@@ -279,7 +283,7 @@ fi
 export PYTHONPATH=$project/src:$repo${PYTHONPATH:+:$PYTHONPATH}
 export PATH=$(dirname "$python"):$PATH
 python_flags=()
-if [[ ${PYTHON_NO_SITE:-false} == true ]]; then
+if [[ $python_no_site == true ]]; then
     # ponytail: skip unrelated editable .pth hooks during concurrent Ray worker startup.
     python_purelib=$("$python" -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
     export PYTHONPATH=$python_purelib:$PYTHONPATH
@@ -306,8 +310,6 @@ else
     exec > >(tee -a "$run_dir/train.log") 2>&1
 fi
 
-stdlib_shm=${STDLIB_SHM:-false}
-[[ $stdlib_shm == true || $stdlib_shm == false ]] || { echo 'STDLIB_SHM must be true or false' >&2; exit 2; }
 if [[ $stdlib_shm == true ]]; then
     # ponytail: tmpfs cache assumes an immutable conda env; delete it after Python upgrades.
     stdlib_cache=/dev/shm/jev-python-stdlib
@@ -320,8 +322,6 @@ if [[ $stdlib_shm == true ]]; then
     ' _ "$stdlib_source" "$stdlib_cache"
     export PYTHONPATH=$stdlib_cache:$PYTHONPATH
 fi
-model_shm=${MODEL_SHM:-false}
-[[ $model_shm == true || $model_shm == false ]] || { echo 'MODEL_SHM must be true or false' >&2; exit 2; }
 if [[ $model_shm == true ]]; then
     # ponytail: one lock serializes cold copies; use per-model locks if staging many models.
     model_hash=$(printf %s "$model_path" | md5sum | cut -d' ' -f1)
