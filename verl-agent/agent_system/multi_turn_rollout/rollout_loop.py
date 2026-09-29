@@ -37,7 +37,8 @@ def stable_task_uids(infos, fallback_uids):
     ], dtype=object)
 
 
-def _jev_tag_token_mask(tokenizer, responses, response_mask, response_texts, tag):
+def _jev_tag_token_mask(
+        tokenizer, responses, response_mask, response_texts, tag, *, include_tags=False):
     """Mask only text inside the first matching tagged span."""
     if len(responses) != len(response_texts):
         raise ValueError("responses and decoded texts must have equal length")
@@ -68,16 +69,22 @@ def _jev_tag_token_mask(tokenizer, responses, response_mask, response_texts, tag
         lower = decoded.lower()
         opening = f"<{tag}>"
         closing = f"</{tag}>"
-        start = lower.find(opening)
-        end = lower.find(closing, start + len(opening)) if start >= 0 else -1
-        if start >= 0 and end >= 0:
-            start += len(opening)
-            if decoded[start:end].strip():
+        tag_start = lower.find(opening)
+        tag_end = lower.find(closing, tag_start + len(opening)) if tag_start >= 0 else -1
+        if tag_start >= 0 and tag_end >= 0:
+            content_start = tag_start + len(opening)
+            if decoded[content_start:tag_end].strip():
+                span_start = tag_start if include_tags else content_start
+                span_end = tag_end + len(closing) if include_tags else tag_end
                 cursor = 0
                 for position, piece in zip(token_positions, pieces, strict=True):
                     token_start, token_end = cursor, cursor + len(piece)
                     cursor = token_end
-                    if token_start >= start and token_end <= end and token_end > token_start:
+                    if (
+                        token_start >= span_start
+                        and token_end <= span_end
+                        and token_end > token_start
+                    ):
                         row_mask[position] = 1
         masks.append(row_mask)
 
@@ -90,6 +97,28 @@ def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
 
 def jev_think_token_mask(tokenizer, responses, response_mask, response_texts):
     return _jev_tag_token_mask(tokenizer, responses, response_mask, response_texts, "think")
+
+
+def jev_credit_token_masks(tokenizer, responses, response_mask, response_texts):
+    """Partition one response into executed-action and remaining reasoning tokens."""
+    action_mask = jev_action_token_mask(
+        tokenizer, responses, response_mask, response_texts
+    )
+    think_mask = jev_think_token_mask(
+        tokenizer, responses, response_mask, response_texts
+    )
+    action_envelope = _jev_tag_token_mask(
+        tokenizer,
+        responses,
+        response_mask,
+        response_texts,
+        "action",
+        include_tags=True,
+    )
+    # ponytail: malformed nested action spans belong to the executed action,
+    # not both credits; use a parser redesign only if the environment changes.
+    think_mask = think_mask * (~action_envelope.bool()).to(think_mask.dtype)
+    return action_mask, think_mask
 
 
 def tagged_content(text, tag):
@@ -471,14 +500,17 @@ class TrajectoryCollector:
             if jev_process_reward:
                 response_length = batch.batch['responses'].size(1)
                 response_mask = batch.batch['attention_mask'][:, -response_length:]
-                batch.batch['jev_action_mask'] = jev_action_token_mask(
-                    self.tokenizer,
-                    batch.batch['responses'],
-                    response_mask,
-                    text_actions,
-                )
                 if self.config.env.alfworld.get('jev_think_credit', False):
-                    batch.batch['jev_think_mask'] = jev_think_token_mask(
+                    action_mask, think_mask = jev_credit_token_masks(
+                        self.tokenizer,
+                        batch.batch['responses'],
+                        response_mask,
+                        text_actions,
+                    )
+                    batch.batch['jev_action_mask'] = action_mask
+                    batch.batch['jev_think_mask'] = think_mask
+                else:
+                    batch.batch['jev_action_mask'] = jev_action_token_mask(
                         self.tokenizer,
                         batch.batch['responses'],
                         response_mask,

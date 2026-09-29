@@ -24,6 +24,7 @@ from agent_system.environments.env_package.alfworld.projection import alfworld_p
 from agent_system.multi_turn_rollout.rollout_loop import (
     TrajectoryCollector,
     jev_action_token_mask,
+    jev_credit_token_masks,
     jev_think_token_mask,
     tagged_content,
 )
@@ -218,6 +219,35 @@ def check_action_format():
     ) == "inspect first"
     assert not torch.any(action_mask.bool() & think_mask.bool())
     assert tagged_content(text, "think") == "inspect first"
+
+    nested = (
+        "<think>Maybe <action>look</action>, then decide.</think>"
+        "<action>take apple</action>"
+    )
+    nested_ids = [ord(char) for char in nested]
+    nested_responses = torch.tensor([nested_ids])
+    nested_response_mask = torch.ones_like(nested_responses)
+    nested_action, nested_think = jev_credit_token_masks(
+        CharacterTokenizer(), nested_responses, nested_response_mask, [nested]
+    )
+    selected_action = "".join(
+        chr(token_id)
+        for token_id, selected in zip(
+            nested_ids, nested_action[0].tolist(), strict=True
+        )
+        if selected
+    )
+    selected_think = "".join(
+        chr(token_id)
+        for token_id, selected in zip(
+            nested_ids, nested_think[0].tolist(), strict=True
+        )
+        if selected
+    )
+    assert selected_action == "look"
+    assert selected_think == "Maybe , then decide."
+    assert "action" not in selected_think
+    assert not torch.any(nested_action.bool() & nested_think.bool())
 
 
 def check_advantage():
