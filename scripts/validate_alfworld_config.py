@@ -2,6 +2,7 @@
 """Validate and render one formal ALFWorld training configuration."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -60,7 +61,8 @@ if invalid_action_shaping:
 seeds = training.get("paired_seeds")
 if not isinstance(seeds, list) or not seeds or len(set(seeds)) != len(seeds):
     raise SystemExit("paired_seeds must contain distinct seeds")
-if any(type(value) is not int or value <= 0 for value in seeds):
+allow_development_seed0 = os.environ.get("ALLOW_DEVELOPMENT_SEED0") == "true"
+if any(type(value) is not int or value < 0 or (value == 0 and not allow_development_seed0) for value in seeds):
     raise SystemExit("paired_seeds must be positive integers and exclude seed 0")
 try:
     selected_seed = int(selected_seed)
