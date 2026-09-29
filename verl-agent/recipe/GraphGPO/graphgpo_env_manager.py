@@ -291,6 +291,10 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                     admissible_actions=reformatted_admissible_actions
                 )
 
+            if self.config.env.alfworld.get('no_thinking', False):
+                # ponytail: keep GraphGPO's native prompt, replacing only its output contract.
+                obs = obs.split("Now it's your turn to take an action.", 1)[0] + "Choose one admissible action. Reply only as <action>action</action>."
+
             postprocess_text_obs.append(obs)
         return postprocess_text_obs
 

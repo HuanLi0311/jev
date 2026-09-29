@@ -18,6 +18,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from evaluator import aggregate_panel
 from agent_system.environments.env_manager import AlfWorldEnvironmentManager, public_alfworld_action
+from recipe.GraphGPO.graphgpo_env_manager import AlfWorldEnvironmentManager as GraphGPOAlfWorldEnvironmentManager
 from agent_system.environments.env_package.alfworld.envs import worker_seed_and_offset
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
 from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector, jev_action_token_mask
@@ -131,6 +132,15 @@ def check_action_format():
         ["Your task is to: find the lamp"], [["look"]], init=True
     )[0]
     assert "<think>" in prompt and "<action>" in prompt
+    graph_manager = GraphGPOAlfWorldEnvironmentManager.__new__(GraphGPOAlfWorldEnvironmentManager)
+    graph_manager.config = SimpleNamespace(
+        env=SimpleNamespace(history_length=0, alfworld={"no_thinking": True})
+    )
+    graph_prompt = graph_manager.build_text_obs(
+        ["Your task is to: find the lamp"], [["look"]], init=True
+    )[0]
+    assert "<think>" not in graph_prompt
+    assert graph_prompt.endswith("Reply only as <action>action</action>.")
     assert alfworld_projection(
         ["<think>I should inspect the room.</think><action>look</action>"],
         [["look"]],
