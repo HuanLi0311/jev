@@ -387,6 +387,11 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
     elif adv_estimator == AdvantageEstimator.JEV_STEP_GRPO:
         if "jev_action_mask" not in data.batch:
             raise ValueError("Jev action-only credit requires jev_action_mask")
+        cot_enabled = "jev_think_mask" in data.batch
+        if cot_enabled and not {
+            "jev_think_scores", "jev_think_confidences"
+        } <= set(data.non_tensor_batch):
+            raise ValueError("Jev think credit is missing scores or confidences")
         advantages, returns, jev_step_metrics = core_algos.compute_jev_step_grpo_advantage(
             token_level_rewards=data.batch["token_level_rewards"],
             response_mask=data.batch["response_mask"],
@@ -396,10 +401,20 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
             index=data.non_tensor_batch["uid"],
             traj_index=data.non_tensor_batch["traj_uid"],
             turn_index=data.non_tensor_batch["turn_index"],
+            think_mask=data.batch.get("jev_think_mask"),
+            think_scores=(
+                data.non_tensor_batch["jev_think_scores"] if cot_enabled else None
+            ),
+            think_confidences=(
+                data.non_tensor_batch["jev_think_confidences"] if cot_enabled else None
+            ),
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
-        data.batch["policy_loss_mask"] = data.batch["jev_action_mask"] * data.batch["response_mask"]
+        policy_mask = data.batch["jev_action_mask"]
+        if cot_enabled:
+            policy_mask = policy_mask + data.batch["jev_think_mask"]
+        data.batch["policy_loss_mask"] = policy_mask.clamp(max=1) * data.batch["response_mask"]
         data.meta_info["jev_step_metrics"] = jev_step_metrics
     else:
         raise NotImplementedError

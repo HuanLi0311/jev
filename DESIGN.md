@@ -319,6 +319,13 @@ trajectory. GraphGPO keeps its native policy-loss mask. The repeatedly inspected
 seed-0/64-task result is historical development evidence and is not rerun as a
 confirmatory seed.
 
+An opt-in exploratory run may set `JEV_THINK_CREDIT=true`. It exposes each
+generated `<think>` span in the completed trajectory and asks separate action
+and reasoning questions for every turn. Action tokens receive
+`c_action*(2*q_action-1)` and reasoning tokens receive
+`c_think*(2*q_think-1)`; format tags and EOS receive neither. This is not the
+maintained Jev-only arm and must be reported separately.
+
 `config/config.yaml` is the single executable source for the common scale,
 paired seeds, shared optimization/generation settings, fixed evaluation panels,
 milestone schedule, and policy revision. `scripts/run_alfworld.sh` consumes it,

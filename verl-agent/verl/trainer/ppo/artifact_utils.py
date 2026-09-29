@@ -25,6 +25,8 @@ NON_TENSOR_FIELDS = (
     "tool_callings",
     "jev_effect_scores",
     "jev_confidences",
+    "jev_think_scores",
+    "jev_think_confidences",
     "data_source",
 )
 

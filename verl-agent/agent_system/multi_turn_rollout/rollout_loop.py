@@ -37,8 +37,8 @@ def stable_task_uids(infos, fallback_uids):
     ], dtype=object)
 
 
-def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
-    """Mask only text inside the first <action>...</action> span."""
+def _jev_tag_token_mask(tokenizer, responses, response_mask, response_texts, tag):
+    """Mask only text inside the first matching tagged span."""
     if len(responses) != len(response_texts):
         raise ValueError("responses and decoded texts must have equal length")
     special_ids = set(tokenizer.all_special_ids)
@@ -66,10 +66,12 @@ def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
 
         row_mask = [0] * len(row_ids)
         lower = decoded.lower()
-        start = lower.find("<action>")
-        end = lower.find("</action>", start + len("<action>")) if start >= 0 else -1
+        opening = f"<{tag}>"
+        closing = f"</{tag}>"
+        start = lower.find(opening)
+        end = lower.find(closing, start + len(opening)) if start >= 0 else -1
         if start >= 0 and end >= 0:
-            start += len("<action>")
+            start += len(opening)
             if decoded[start:end].strip():
                 cursor = 0
                 for position, piece in zip(token_positions, pieces, strict=True):
@@ -80,6 +82,25 @@ def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
         masks.append(row_mask)
 
     return torch.as_tensor(masks, dtype=response_mask.dtype, device=response_mask.device)
+
+
+def jev_action_token_mask(tokenizer, responses, response_mask, response_texts):
+    return _jev_tag_token_mask(tokenizer, responses, response_mask, response_texts, "action")
+
+
+def jev_think_token_mask(tokenizer, responses, response_mask, response_texts):
+    return _jev_tag_token_mask(tokenizer, responses, response_mask, response_texts, "think")
+
+
+def tagged_content(text, tag):
+    if not isinstance(text, str):
+        raise ValueError("tagged response must be text")
+    lower = text.lower()
+    opening = f"<{tag}>"
+    closing = f"</{tag}>"
+    start = lower.find(opening)
+    end = lower.find(closing, start + len(opening)) if start >= 0 else -1
+    return text[start + len(opening):end].strip() if start >= 0 and end >= 0 else ""
 
 
 class TrajectoryCollector:
@@ -456,6 +477,13 @@ class TrajectoryCollector:
                     response_mask,
                     text_actions,
                 )
+                if self.config.env.alfworld.get('jev_think_credit', False):
+                    batch.batch['jev_think_mask'] = jev_think_token_mask(
+                        self.tokenizer,
+                        batch.batch['responses'],
+                        response_mask,
+                        text_actions,
+                    )
             
             next_obs, rewards, dones, infos = envs.step(text_actions)
 
@@ -544,6 +572,7 @@ class TrajectoryCollector:
 
         trajectories = []
         active_rows = []
+        include_reasoning = self.config.env.alfworld.get('jev_think_credit', False)
         for batch_index, (batch_rows, info_rows) in enumerate(zip(total_batch_list, total_infos, strict=True)):
             pairs = [
                 (row, info) for row, info in zip(batch_rows, info_rows, strict=True)
@@ -552,6 +581,16 @@ class TrajectoryCollector:
             if not pairs:
                 raise ValueError('completed trajectory has no active transitions')
             active_rows.append([row for row, _ in pairs])
+            steps = []
+            for row, info in pairs:
+                step = {
+                    'observation': str(row['anchor_obs']),
+                    'action': str(info['public_action']),
+                    'observed_result': str(info['observation_text']),
+                }
+                if include_reasoning:
+                    step['reasoning'] = tagged_content(str(row['action_text']), 'think')
+                steps.append(step)
             trajectories.append({
                 'trajectory_id': str(traj_uid[batch_index]),
                 'task': str(envs.tasks[batch_index]),
@@ -560,21 +599,16 @@ class TrajectoryCollector:
                     'success': bool(success['success_rate'][batch_index]),
                     'reward_definition': 'ALFWorld sparse verifier: 10 iff every task condition is satisfied, otherwise 0.',
                 },
-                'steps': [
-                    {
-                        'observation': str(row['anchor_obs']),
-                        'action': str(info['public_action']),
-                        'observed_result': str(info['observation_text']),
-                    }
-                    for row, info in pairs
-                ],
+                'steps': steps,
             })
 
         # ponytail: one batched typed request per trajectory; four concurrent
         # requests match the already-tested API pressure of the prefix arm.
         with ThreadPoolExecutor(max_workers=min(4, len(trajectories))) as pool:
             records = list(pool.map(
-                lambda trajectory: score_completed_trajectory(key, trajectory),
+                lambda trajectory: score_completed_trajectory(
+                    key, trajectory, include_reasoning=include_reasoning
+                ),
                 trajectories,
             ))
 
@@ -586,6 +620,11 @@ class TrajectoryCollector:
                 for row, credit in zip(rows, record['step_credit'], strict=True):
                     row['jev_effect_scores'] = np.float32(credit['jev_score'])
                     row['jev_confidences'] = np.float32(credit['jev_confidence'])
+                    if include_reasoning:
+                        row['jev_think_scores'] = np.float32(credit['jev_think_score'])
+                        row['jev_think_confidences'] = np.float32(
+                            credit['jev_think_confidence']
+                        )
                 record['env_index'] = batch_index
                 record['task_uid'] = str(rows[0]['task_uid'])
                 sink.write(json.dumps(record, ensure_ascii=False) + '\n')

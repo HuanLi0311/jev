@@ -226,9 +226,11 @@ use_remove_padding=${USE_REMOVE_PADDING:-${cfg[use_remove_padding]}}
 python_no_site=${PYTHON_NO_SITE:-false}
 stdlib_shm=${STDLIB_SHM:-false}
 model_shm=${MODEL_SHM:-false}
-for value in "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding" "$python_no_site" "$stdlib_shm" "$model_shm"; do
+jev_think_credit=${JEV_THINK_CREDIT:-false}
+for value in "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding" "$python_no_site" "$stdlib_shm" "$model_shm" "$jev_think_credit"; do
     [[ $value == true || $value == false ]] || { echo 'boolean runtime overrides must be true or false' >&2; exit 2; }
 done
+[[ $jev_think_credit == false || $arm == jev ]] || { echo 'JEV_THINK_CREDIT requires the jev arm' >&2; exit 2; }
 actor_micro_batch=${ACTOR_MICRO_BATCH:-${cfg[actor_micro_batch_size_per_gpu]}}
 log_prob_micro_batch=${LOG_PROB_MICRO_BATCH:-${cfg[log_prob_micro_batch_size_per_gpu]}}
 tensor_parallel_size=${TENSOR_MODEL_PARALLEL_SIZE:-${cfg[tensor_model_parallel_size]}}
@@ -244,6 +246,7 @@ if [[ ${CHECK_CONFIG_ONLY:-false} == true ]]; then
         "$arm" "$entrypoint" "$seed" "$seed" "$seed" "${cfg[groups]}" "${cfg[rollouts]}" \
         "${cfg[max_steps]}" "${cfg[updates]}" "${cfg[eval_panels]}" "${cfg[milestones]}" \
         "${cfg[invalid_action_shaping]}" "$use_remove_padding" "$python_no_site" "$stdlib_shm" "$model_shm"
+    printf 'jev_think_credit=%s\n' "$jev_think_credit"
     exit 0
 fi
 
@@ -268,6 +271,7 @@ runtime_selection=$(
     printf 'optimizer_offload=%s\nreference_parameter_offload=%s\npersistent_rollout=%s\nuse_remove_padding=%s\n' "$optimizer_offload" "$ref_param_offload" "$persistent_rollout" "$use_remove_padding"
     printf 'tensor_model_parallel_size=%s\nrollout_gpu_memory_utilization=%s\nray_num_cpus=%s\n' "$tensor_parallel_size" "$rollout_gpu_util" "$ray_num_cpus"
     printf 'python_no_site=%s\nstdlib_shm=%s\nmodel_shm=%s\n' "$python_no_site" "$stdlib_shm" "$model_shm"
+    printf 'jev_think_credit=%s\n' "$jev_think_credit"
 )
 if [[ $resume_mode == disable ]]; then
     printf '%s' "$runtime_selection" > "$run_dir/resolved-runtime.txt"
@@ -389,6 +393,7 @@ common_args=(
     "env.rollout.n=${cfg[rollouts]}"
     "+env.alfworld.no_thinking=$no_thinking"
     "+env.alfworld.jev_process_reward=$jev_process_reward"
+    "+env.alfworld.jev_think_credit=$jev_think_credit"
     "+env.alfworld.jev_log_path=$run_dir/jev-process.jsonl"
     env.resources_per_worker.num_cpus=0.1
     "ray_init.num_cpus=$ray_num_cpus"

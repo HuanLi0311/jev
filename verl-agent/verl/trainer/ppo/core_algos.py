@@ -183,14 +183,18 @@ def compute_jev_step_grpo_advantage(
     index: np.ndarray,
     traj_index: np.ndarray,
     turn_index: np.ndarray,
+    think_mask: torch.Tensor | None = None,
+    think_scores: np.ndarray | None = None,
+    think_confidences: np.ndarray | None = None,
     epsilon: float = 1e-6,
 ):
     """Use confidence-weighted continuous Jev scores as per-turn advantages.
 
     A_jev = confidence * (2 * score - 1). The verified outcome conditions
     Jev's retrospective score but is not added again as a separate advantage.
-    Only environment-facing action tokens receive this credit. Values are
-    deliberately not standardized because magnitude carries confidence.
+    By default only environment-facing action tokens receive this credit. The
+    exploratory CoT mode may supply a separate score for reasoning tokens.
+    Values are deliberately not standardized because magnitude carries confidence.
     """
     if action_mask.shape != response_mask.shape:
         raise ValueError("Jev action mask must match the response mask")
@@ -199,7 +203,28 @@ def compute_jev_step_grpo_advantage(
         raise ValueError("Jev action mask must be binary")
     if torch.any(action_mask.bool() & ~response_mask.bool()):
         raise ValueError("Jev action mask must be a subset of the response mask")
-    credit_mask = action_mask * response_mask
+    action_credit_mask = action_mask * response_mask
+    cot_enabled = any(value is not None for value in (
+        think_mask, think_scores, think_confidences
+    ))
+    if cot_enabled and any(value is None for value in (
+        think_mask, think_scores, think_confidences
+    )):
+        raise ValueError("Jev think mask, scores, and confidences must be supplied together")
+    if cot_enabled:
+        if think_mask.shape != response_mask.shape:
+            raise ValueError("Jev think mask must match the response mask")
+        think_mask = think_mask.to(device=response_mask.device, dtype=response_mask.dtype)
+        if torch.any((think_mask < 0) | (think_mask > 1)):
+            raise ValueError("Jev think mask must be binary")
+        if torch.any(think_mask.bool() & ~response_mask.bool()):
+            raise ValueError("Jev think mask must be a subset of the response mask")
+        if torch.any(think_mask.bool() & action_mask.bool()):
+            raise ValueError("Jev action and think masks must be disjoint")
+        think_credit_mask = think_mask * response_mask
+    else:
+        think_credit_mask = torch.zeros_like(action_credit_mask)
+    credit_mask = action_credit_mask + think_credit_mask
     outcomes = token_level_rewards.sum(dim=-1).detach().cpu().numpy()
     scores = np.asarray([
         float(np.asarray(value).reshape(-1)[0]) for value in effect_scores
@@ -218,7 +243,30 @@ def compute_jev_step_grpo_advantage(
     jev_values = confidence_values * (2 * scores - 1)
     jev_tensor = torch.as_tensor(
         jev_values, dtype=torch.float32, device=response_mask.device
-    ).unsqueeze(-1) * credit_mask
+    ).unsqueeze(-1) * action_credit_mask
+    if cot_enabled:
+        think_score_values = np.asarray([
+            float(np.asarray(value).reshape(-1)[0]) for value in think_scores
+        ], dtype=np.float64)
+        think_confidence_values = np.asarray([
+            float(np.asarray(value).reshape(-1)[0]) for value in think_confidences
+        ], dtype=np.float64)
+        if len(think_score_values) != len(outcomes) or len(think_confidence_values) != len(outcomes):
+            raise ValueError("Jev think scores and confidences must align with the batch")
+        if not np.isfinite(think_score_values).all() or np.any(
+            (think_score_values < 0) | (think_score_values > 1)
+        ):
+            raise ValueError("Jev think scores must be finite and in [0, 1]")
+        if not np.isfinite(think_confidence_values).all() or np.any(
+            (think_confidence_values < 0) | (think_confidence_values > 1)
+        ):
+            raise ValueError("Jev think confidences must be finite and in [0, 1]")
+        think_jev_values = think_confidence_values * (2 * think_score_values - 1)
+        jev_tensor += torch.as_tensor(
+            think_jev_values, dtype=torch.float32, device=response_mask.device
+        ).unsqueeze(-1) * think_credit_mask
+    else:
+        think_score_values = think_confidence_values = think_jev_values = None
 
     records = {}
     for batch_idx, (task, traj, turn) in enumerate(
@@ -232,6 +280,12 @@ def compute_jev_step_grpo_advantage(
                 abs(previous["score"] - scores[batch_idx]) > epsilon
                 or abs(previous["confidence"] - confidence_values[batch_idx]) > epsilon
                 or abs(previous["outcome"] - outcome) > epsilon
+                or (
+                    cot_enabled and (
+                        abs(previous["think_score"] - think_score_values[batch_idx]) > epsilon
+                        or abs(previous["think_confidence"] - think_confidence_values[batch_idx]) > epsilon
+                    )
+                )
             ):
                 raise ValueError("duplicate trajectory turn has inconsistent rewards")
             continue
@@ -242,6 +296,12 @@ def compute_jev_step_grpo_advantage(
             "jev_advantage": jev_values[batch_idx],
             "outcome": outcome,
         }
+        if cot_enabled:
+            records[key].update({
+                "think_score": think_score_values[batch_idx],
+                "think_confidence": think_confidence_values[batch_idx],
+                "think_jev_advantage": think_jev_values[batch_idx],
+            })
 
     trajectories = defaultdict(list)
     for key, record in records.items():
@@ -261,7 +321,13 @@ def compute_jev_step_grpo_advantage(
 
     nonconstant = 0
     for keys in trajectories.values():
-        values = {round(records[key]["jev_advantage"], 12) for key in keys}
+        values = {
+            (
+                round(records[key]["jev_advantage"], 12),
+                round(records[key].get("think_jev_advantage", 0.0), 12),
+            )
+            for key in keys
+        }
         nonconstant += len(values) > 1
     outcome_equivalent_keys = {
         key
@@ -270,12 +336,20 @@ def compute_jev_step_grpo_advantage(
         for key in keys
     }
     active_outcome_equivalent = sum(
-        abs(records[key]["jev_advantage"]) > epsilon for key in outcome_equivalent_keys
+        (
+            abs(records[key]["jev_advantage"]) > epsilon
+            or abs(records[key].get("think_jev_advantage", 0.0)) > epsilon
+        )
+        for key in outcome_equivalent_keys
     )
     stats = {
         "transitions": float(len(records)),
         "nonzero_transition_fraction": sum(
-            abs(record["jev_advantage"]) > epsilon for record in records.values()
+            (
+                abs(record["jev_advantage"]) > epsilon
+                or abs(record.get("think_jev_advantage", 0.0)) > epsilon
+            )
+            for record in records.values()
         ) / max(len(records), 1),
         "nonconstant_trajectory_fraction": nonconstant / max(len(trajectories), 1),
         "outcome_equivalent_nonzero_fraction": (
@@ -286,7 +360,7 @@ def compute_jev_step_grpo_advantage(
             jev_tensor.abs().sum() / credit_mask.sum().clamp_min(1)
         ),
         "action_token_fraction": float(
-            credit_mask.sum() / response_mask.sum().clamp_min(1)
+            action_credit_mask.sum() / response_mask.sum().clamp_min(1)
         ),
         "transitions_with_action_fraction": float(
             (credit_mask.sum(dim=-1) > 0).float().mean()
@@ -295,6 +369,18 @@ def compute_jev_step_grpo_advantage(
         "mean_confidence": float(confidence_values.mean()) if len(confidence_values) else 0.0,
         "mean_abs_jev_advantage": float(np.abs(jev_values).mean()) if len(jev_values) else 0.0,
     }
+    if cot_enabled:
+        stats.update({
+            "think_token_fraction": float(
+                think_credit_mask.sum() / response_mask.sum().clamp_min(1)
+            ),
+            "transitions_with_think_fraction": float(
+                (think_credit_mask.sum(dim=-1) > 0).float().mean()
+            ),
+            "mean_think_score": float(think_score_values.mean()),
+            "mean_think_confidence": float(think_confidence_values.mean()),
+            "mean_abs_think_jev_advantage": float(np.abs(think_jev_values).mean()),
+        })
     return jev_tensor, jev_tensor, stats
 
 
