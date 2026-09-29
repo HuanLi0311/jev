@@ -1,0 +1,92 @@
+model_path: "~/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
+
+data:
+  train_files:
+    - config/alfworld-train-slots-pilot4.parquet
+  validation_files:
+    - config/alfworld-eval-slots-pilot64.parquet
+  shuffle: false
+  filter_overlong_prompts: true
+  truncation: left
+  return_raw_chat: true
+
+training:
+  tasks: 4
+  rollouts: 4
+  max_steps: 30
+  history_length: 2
+  updates: 10
+  paired_seeds: [0]
+  invalid_action_shaping: false
+
+optimization:
+  learning_rate: 0.000001
+  ppo_mini_batch_size: 16
+  use_kl_loss: true
+  use_kl_in_reward: false
+  kl_loss_coef: 0.01
+  kl_loss_type: low_var_kl
+
+generation:
+  max_prompt_length: 2048
+  max_response_length: 256
+  enable_thinking: false
+  train:
+    temperature: 1.0
+    top_p: 1.0
+    top_k: -1
+    do_sample: true
+  evaluation:
+    temperature: 0.0
+    top_p: 1.0
+    top_k: -1
+    do_sample: false
+
+runtime:
+  actor_micro_batch_size_per_gpu: 1
+  log_prob_micro_batch_size_per_gpu: 1
+  optimizer_offload: false
+  reference_parameter_offload: true
+  persistent_rollout: false
+  rollout_gpu_memory_utilization: 0.40
+  tensor_model_parallel_size: 1
+  ray_num_cpus: 16
+  use_remove_padding: false
+  use_torch_compile: false
+  gradient_checkpointing: true
+  actor_parameter_offload: false
+  enforce_eager: true
+  enable_chunked_prefill: true
+  free_cache_engine: true
+
+methods:
+  grpo:
+    cross_steps: false
+  gigpo:
+    gamma: 0.95
+    step_advantage_w: 1.0
+    mode: mean_std_norm
+    enable_similarity: false
+    similarity_thresh: 0.95
+  hgpo:
+    gamma: 0.95
+    mode: mean_std_norm
+    weight_type: length
+    length_weight_alpha: 1.0
+    base_group: false
+  graphgpo:
+    gamma: 0.10
+    step_advantage_w: 1.0
+    episode_advantage_w: 1.0
+    mode: mean_std_norm
+    enable_similarity: false
+    similarity_thresh: 0.95
+    normalize_distance: false
+
+evaluation:
+  tasks: 64
+  seed: 1000
+  panels:
+    valid_seen: eval_in_distribution
+    valid_unseen: eval_out_of_distribution
+  milestones: [0, 5, 10]
