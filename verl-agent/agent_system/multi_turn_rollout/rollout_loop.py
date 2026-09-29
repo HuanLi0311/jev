@@ -80,11 +80,9 @@ def _jev_tag_token_mask(
                 for position, piece in zip(token_positions, pieces, strict=True):
                     token_start, token_end = cursor, cursor + len(piece)
                     cursor = token_end
-                    if (
-                        token_start >= span_start
-                        and token_end <= span_end
-                        and token_end > token_start
-                    ):
+                    contained = token_start >= span_start and token_end <= span_end
+                    overlaps = token_start < span_end and token_end > span_start
+                    if token_end > token_start and (overlaps if include_tags else contained):
                         row_mask[position] = 1
         masks.append(row_mask)
 
