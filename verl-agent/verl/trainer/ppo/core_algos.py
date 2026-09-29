@@ -183,9 +183,9 @@ def compute_jev_step_grpo_advantage(
     index: np.ndarray,
     traj_index: np.ndarray,
     turn_index: np.ndarray,
-    think_mask: torch.Tensor | None = None,
-    think_scores: np.ndarray | None = None,
-    think_confidences: np.ndarray | None = None,
+    think_mask=None,
+    think_scores=None,
+    think_confidences=None,
     epsilon: float = 1e-6,
 ):
     """Use confidence-weighted continuous Jev scores as per-turn advantages.
@@ -363,7 +363,7 @@ def compute_jev_step_grpo_advantage(
             action_credit_mask.sum() / response_mask.sum().clamp_min(1)
         ),
         "transitions_with_action_fraction": float(
-            (credit_mask.sum(dim=-1) > 0).float().mean()
+            (action_credit_mask.sum(dim=-1) > 0).float().mean()
         ),
         "mean_effect_score": float(scores.mean()) if len(scores) else 0.0,
         "mean_confidence": float(confidence_values.mean()) if len(confidence_values) else 0.0,

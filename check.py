@@ -21,8 +21,13 @@ from agent_system.environments.env_manager import AlfWorldEnvironmentManager, pu
 from recipe.GraphGPO.graphgpo_env_manager import AlfWorldEnvironmentManager as GraphGPOAlfWorldEnvironmentManager
 from agent_system.environments.env_package.alfworld.envs import worker_seed_and_offset
 from agent_system.environments.env_package.alfworld.projection import alfworld_projection
-from agent_system.multi_turn_rollout.rollout_loop import TrajectoryCollector, jev_action_token_mask
-from score import public_completed_trajectory, questions_for_steps
+from agent_system.multi_turn_rollout.rollout_loop import (
+    TrajectoryCollector,
+    jev_action_token_mask,
+    jev_think_token_mask,
+    tagged_content,
+)
+from score import parse_step_scores, public_completed_trajectory, questions_for_steps
 from verl.trainer.ppo.artifact_utils import dump_training_transitions
 from verl.trainer.ppo.core_algos import compute_jev_step_grpo_advantage
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
@@ -122,6 +127,24 @@ def check_public_input():
     assert state["verified_outcome"]["success"] is False
     assert "verified final outcome" in questions_for_steps(1)["step_0000"]["instructions"]
 
+    trajectory["steps"][0]["reasoning"] = "I should pick up the apple first."
+    cot_state = public_completed_trajectory(trajectory, include_reasoning=True)
+    assert cot_state["completed_public_trajectory"][0]["reasoning"] == (
+        "I should pick up the apple first."
+    )
+    cot_questions = questions_for_steps(1, include_reasoning=True)
+    assert set(cot_questions) == {"step_0000_action", "step_0000_think"}
+    assert "help produce a good trajectory" in cot_questions["step_0000_think"]["instructions"]
+    cot_scores = parse_step_scores({
+        "model": "jev-1.13.0",
+        "answers": {
+            "step_0000_action": {"score": 0.8, "confidence": 0.5},
+            "step_0000_think": {"score": 0.25, "confidence": 0.4},
+        },
+    }, 1, include_reasoning=True)
+    assert abs(cot_scores[0]["jev_advantage"] - 0.3) < 1e-6
+    assert abs(cot_scores[0]["jev_think_advantage"] + 0.2) < 1e-6
+
 
 def check_action_format():
     manager = AlfWorldEnvironmentManager.__new__(AlfWorldEnvironmentManager)
@@ -185,6 +208,16 @@ def check_action_format():
         for token_id, selected in zip(response_ids, action_mask[0].tolist(), strict=True)
         if selected
     ) == "go left"
+    think_mask = jev_think_token_mask(
+        CharacterTokenizer(), responses, response_mask, [text]
+    )
+    assert "".join(
+        chr(token_id)
+        for token_id, selected in zip(response_ids, think_mask[0].tolist(), strict=True)
+        if selected
+    ) == "inspect first"
+    assert not torch.any(action_mask.bool() & think_mask.bool())
+    assert tagged_content(text, "think") == "inspect first"
 
 
 def check_advantage():
@@ -228,6 +261,31 @@ def check_advantage():
         **kwargs,
     )
     assert torch.equal(advantages, changed_outcomes)
+
+    # Each row is one transition: its think/action values stay within that row.
+    cot_advantages, _, cot_metrics = compute_jev_step_grpo_advantage(
+        token_level_rewards=torch.zeros_like(masks),
+        response_mask=masks,
+        action_mask=kwargs["action_mask"],
+        effect_scores=np.array([0.9, 0.5, 0.2], dtype=np.float32),
+        confidences=np.array([0.25, 1.0, 0.5], dtype=np.float32),
+        index=kwargs["index"],
+        traj_index=kwargs["traj_index"],
+        turn_index=kwargs["turn_index"],
+        think_mask=torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+        ]),
+        think_scores=np.array([0.25, 1.0, 0.75], dtype=np.float32),
+        think_confidences=np.array([0.4, 1.0, 0.6], dtype=np.float32),
+    )
+    assert torch.allclose(cot_advantages, torch.tensor([
+        [-0.2, 0.2, 0.0],
+        [0.0, 0.0, 0.0],
+        [0.3, -0.3, -0.3],
+    ]), atol=1e-6)
+    assert cot_metrics["think_token_fraction"] > 0
 
 
 def check_post_episode_annotation():

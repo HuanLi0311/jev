@@ -606,8 +606,9 @@ class TrajectoryCollector:
         # requests match the already-tested API pressure of the prefix arm.
         with ThreadPoolExecutor(max_workers=min(4, len(trajectories))) as pool:
             records = list(pool.map(
-                lambda trajectory: score_completed_trajectory(
-                    key, trajectory, include_reasoning=include_reasoning
+                lambda trajectory: (
+                    score_completed_trajectory(key, trajectory, include_reasoning=True)
+                    if include_reasoning else score_completed_trajectory(key, trajectory)
                 ),
                 trajectories,
             ))
