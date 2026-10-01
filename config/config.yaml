@@ -17,7 +17,7 @@ training:
   max_steps: 50
   history_length: 2
   updates: 150
-  paired_seeds: [1, 2, 3]
+  paired_seeds: [1]
   invalid_action_shaping: false
 
 # Shared policy-update settings for every controlled arm. Method-specific
