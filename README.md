@@ -46,11 +46,11 @@ python check.py
 
 ## 3. 脚本启动
 
-在 `scripts/run_alfworld.sh` 顶部选择参与实验的方法：
-
-```bash
-algos=(grpo jev gigpo graphgpo)
-
+当前维护的 suite 固定运行 Jev，单个 arm 使用全部 8 张 GPU。训练规模、seed、
+checkpoint/evaluation milestone 和评测面板只由 `config/config.yaml` 定义；不要在
+launcher 中复制这些值。当前 Jev 在整条轨迹结束后读取公开轨迹和 verified
+outcome，并为同一批的所有轨迹并发请求评分。策略 credit 仍只施加到对应
+transition 的 action token：`confidence * (2 * score - 1)`；CoT 默认关闭。
 
 正式运行前先验证配置和调度，不会启动训练：
 
@@ -62,7 +62,8 @@ CHECK_CONFIG_ONLY=true CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
   scripts/run_alfworld.sh formal-v1
 ```
 
-使用 8 张 GPU 启动统一实验。包含 Jev 时先通过环境变量提供 API key：
+使用 8 张 GPU 启动实验。先通过环境变量提供 API key；不要把 key 写入仓库、
+README 或命令行参数：
 
 ```bash
 export TYPESAFE_API_KEY='<your-key>'
@@ -70,17 +71,22 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
   scripts/run_alfworld.sh formal-v1
 ```
 
-每个算法使用两张 GPU，最多四个算法并行；第五个算法进入下一批。脚本按
-`config/config.yaml` 训练，保存所有 milestone checkpoint，并在训练结束后
-自动测评 `valid_seen` 和 `valid_unseen`。结果位于
-`runs/grpo-alfworld-formal-v1-<algo>-seed<seed>/`。
+脚本按 `config/config.yaml` 依次运行配置的 training seed，保存所有 milestone
+checkpoint，并在每个 seed 训练结束后自动测评 `valid_seen` 和
+`valid_unseen`。结果位于
+`runs/grpo-alfworld-formal-v1-jev-seed<seed>/`。
 
-单独启动一种方法时使用两张 GPU，并显式给出方法、run tag 和 seed：
+如需只运行一个 seed，仍使用 8 张 GPU，并显式给出方法、run tag 和 seed：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 \
-  scripts/run_alfworld.sh grpo smoke-grpo-seed1 1
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+  scripts/run_alfworld.sh jev smoke-jev-seed1 1
 ```
 
-## jev_key
-apikey_21227c7f4b1ca01f4de0bc45ad653eb6f2c0_719e7e9ddb4ea7ab4d059165d7b0924c7d3a73f5d452408abbb6835cc0492b33
+共享文件系统上如果 Ray worker 冷启动时注册超时，可使用 launcher 已有的校准开关：
+
+```bash
+PYTHON_NO_SITE=true STDLIB_SHM=true \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+  scripts/run_alfworld.sh formal-v1
+```

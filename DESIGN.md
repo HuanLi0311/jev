@@ -1,6 +1,6 @@
 # Jev as a process judge on agent trajectories
 
-Research date: 2026-09-19; updated 2026-09-28
+Research date: 2026-09-19; updated 2026-10-01
 
 ## Question
 
@@ -304,7 +304,7 @@ The current executable Jev stage uses the common large scale:
 - three fresh paired training seeds `[1, 2, 3]`, excluding development seed 0;
 - 256 response tokens, non-thinking `<action>...</action>` output, and PPO
   mini-batches of 16;
-- deterministic checkpoints at updates 0, 10, 40, 80, and 150;
+- evenly spaced checkpoints at updates 0, 30, 60, 90, 120, and 150;
 - a fixed 128-task `valid_seen` panel and a fixed 128-task `valid_unseen`
   panel, identical across algorithms and training seeds;
 - primary reporting by environment-transition budget: strict success,

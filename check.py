@@ -51,7 +51,7 @@ def check_formal_config():
     assert 0 not in training["paired_seeds"]
     assert len(training["paired_seeds"]) == len(set(training["paired_seeds"]))
     assert evaluation["tasks"] == 128
-    assert evaluation["milestones"] == [0, 10, 40, 80, 150]
+    assert evaluation["milestones"] == [0, 30, 60, 90, 120, 150]
     assert evaluation["seed"] == 1000
     assert evaluation["panels"] == {
         "valid_seen": "eval_in_distribution",

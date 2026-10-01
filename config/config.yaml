@@ -95,4 +95,4 @@ evaluation:
   panels:
     valid_seen: eval_in_distribution
     valid_unseen: eval_out_of_distribution
-  milestones: [0, 10, 40, 80, 150]
+  milestones: [0, 30, 60, 90, 120, 150]
