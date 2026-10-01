@@ -47,7 +47,7 @@ def check_formal_config():
     evaluation = config["evaluation"]
     assert training["tasks"] == 16 and training["rollouts"] == 8
     assert training["max_steps"] == 50 and training["updates"] == 150
-    assert training["paired_seeds"] == [1, 2, 3]
+    assert training["paired_seeds"] == [1]
     assert 0 not in training["paired_seeds"]
     assert len(training["paired_seeds"]) == len(set(training["paired_seeds"]))
     assert evaluation["tasks"] == 128

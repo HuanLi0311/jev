@@ -301,7 +301,8 @@ The current executable Jev stage uses the common large scale:
 - 16 task groups per update and eight rollouts per group;
 - 50 environment steps per trajectory and history length two;
 - 150 updates;
-- three fresh paired training seeds `[1, 2, 3]`, excluding development seed 0;
+- one fresh training seed `[1]` in the current execution, excluding development
+  seed 0; expand to paired seeds before making confirmatory multi-seed claims;
 - 256 response tokens, non-thinking `<action>...</action>` output, and PPO
   mini-batches of 16;
 - evenly spaced checkpoints at updates 0, 30, 60, 90, 120, and 150;
