@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -44,12 +45,13 @@ def check_formal_config():
     )
     training = config["training"]
     evaluation = config["evaluation"]
-    assert training["tasks"] > 0 and training["rollouts"] > 0
-    assert training["paired_seeds"] == [1]
+    assert training["tasks"] == 16 and training["rollouts"] == 8
+    assert training["max_steps"] == 50 and training["updates"] == 150
+    assert training["paired_seeds"] == [1, 2, 3]
     assert 0 not in training["paired_seeds"]
     assert len(training["paired_seeds"]) == len(set(training["paired_seeds"]))
-    assert evaluation["milestones"][0] == 0
-    assert evaluation["milestones"][-1] == training["updates"]
+    assert evaluation["tasks"] == 128
+    assert evaluation["milestones"] == [0, 10, 40, 80, 150]
     assert evaluation["seed"] == 1000
     assert evaluation["panels"] == {
         "valid_seen": "eval_in_distribution",
@@ -59,23 +61,23 @@ def check_formal_config():
     assert config["data"]["shuffle"] is False
     assert config["data"]["truncation"] == "left"
     assert config["generation"]["max_response_length"] == 256
-    assert config["generation"]["enable_thinking"] is True
+    assert config["generation"]["enable_thinking"] is False
     assert config["generation"]["evaluation"] == {
-        "temperature": 0.4,
+        "temperature": 0.0,
         "top_p": 1.0,
         "top_k": -1,
-        "do_sample": True,
+        "do_sample": False,
     }
     assert config["optimization"]["learning_rate"] > 0
     assert config["optimization"]["ppo_mini_batch_size"] == 16
     assert config["optimization"]["use_kl_in_reward"] is False
     runtime = config["runtime"]
-    assert runtime["rollout_gpu_memory_utilization"] == 0.20
-    assert runtime["tensor_model_parallel_size"] == 2
-    assert runtime["use_remove_padding"] is True
-    assert runtime["enforce_eager"] is False
-    assert runtime["enable_chunked_prefill"] is False
-    assert runtime["free_cache_engine"] is False
+    assert runtime["rollout_gpu_memory_utilization"] == 0.40
+    assert runtime["tensor_model_parallel_size"] == 1
+    assert runtime["use_remove_padding"] is False
+    assert runtime["enforce_eager"] is True
+    assert runtime["enable_chunked_prefill"] is True
+    assert runtime["free_cache_engine"] is True
     for files, expected in (
         (config["data"]["train_files"], training["tasks"]),
         (config["data"]["validation_files"], evaluation["tasks"]),
@@ -325,7 +327,7 @@ def check_post_episode_annotation():
         collector.config = SimpleNamespace(
             env=SimpleNamespace(alfworld={"jev_log_path": log_path})
         )
-        rollout_rows = [[
+        row_template = [
             {
                 "active_masks": True,
                 "anchor_obs": "room",
@@ -342,54 +344,76 @@ def check_post_episode_annotation():
                 "jev_effect_scores": 0.5,
                 "jev_confidences": 0.0,
             },
-        ]]
-        rollout_infos = [[
+        ]
+        info_template = [
             {"observation_text": "You enter the kitchen.", "public_action": "look"},
             {"observation_text": "You take the apple.", "public_action": "take apple"},
-        ]]
+        ]
+        trajectory_count = 6
+        rollout_rows = [
+            [dict(row) for row in row_template] for _ in range(trajectory_count)
+        ]
+        rollout_infos = [
+            [dict(info) for info in info_template] for _ in range(trajectory_count)
+        ]
+        barrier = threading.Barrier(trajectory_count)
+        lock = threading.Lock()
+        active = peak = 0
 
         def fake_score(key, trajectory):
-            assert key == "test-only"
-            assert trajectory["outcome"] == {
-                "reward": 0.0,
-                "success": False,
-                "reward_definition": (
-                    "ALFWorld sparse verifier: 10 iff every task condition is "
-                    "satisfied, otherwise 0."
-                ),
-            }
-            assert len(trajectory["steps"]) == 2
-            assert [step["action"] for step in trajectory["steps"]] == [
-                "look", "take apple"
-            ]
-            assert "<think>" not in json.dumps(trajectory)
-            return {
-                "trajectory_id": trajectory["trajectory_id"],
-                "rubric_version": "test",
-                "request": {},
-                "response": {},
-                "step_credit": [
-                    {"step_index": 0, "jev_score": 0.8, "jev_confidence": 0.7},
-                    {"step_index": 1, "jev_score": 0.2, "jev_confidence": 0.6},
-                ],
-                "latency_seconds": 0.0,
-            }
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                barrier.wait(timeout=5)
+                assert key == "test-only"
+                assert trajectory["outcome"] == {
+                    "reward": 0.0,
+                    "success": False,
+                    "reward_definition": (
+                        "ALFWorld sparse verifier: 10 iff every task condition is "
+                        "satisfied, otherwise 0."
+                    ),
+                }
+                assert len(trajectory["steps"]) == 2
+                assert [step["action"] for step in trajectory["steps"]] == [
+                    "look", "take apple"
+                ]
+                assert "<think>" not in json.dumps(trajectory)
+                return {
+                    "trajectory_id": trajectory["trajectory_id"],
+                    "rubric_version": "test",
+                    "request": {},
+                    "response": {},
+                    "step_credit": [
+                        {"step_index": 0, "jev_score": 0.8, "jev_confidence": 0.7},
+                        {"step_index": 1, "jev_score": 0.2, "jev_confidence": 0.6},
+                    ],
+                    "latency_seconds": 0.0,
+                }
+            finally:
+                with lock:
+                    active -= 1
 
         with patch.dict(os.environ, {"TYPESAFE_API_KEY": "test-only"}), patch(
             "score.score_completed_trajectory", side_effect=fake_score
         ):
             collector._annotate_jev_process_rewards(
-                SimpleNamespace(tasks=["put apple in fridge"]),
+                SimpleNamespace(tasks=["put apple in fridge"] * trajectory_count),
                 rollout_rows,
                 rollout_infos,
-                np.array([0.0]),
-                {"success_rate": np.array([0.0])},
-                np.array(["trace"]),
+                np.zeros(trajectory_count),
+                {"success_rate": np.zeros(trajectory_count)},
+                np.array([f"trace-{index}" for index in range(trajectory_count)]),
             )
+        assert peak == trajectory_count
         assert rollout_rows[0][0]["jev_effect_scores"] == np.float32(0.8)
         assert rollout_rows[0][1]["jev_confidences"] == np.float32(0.6)
-        record = json.loads(Path(log_path).read_text())
-        assert record["trajectory_id"] == "trace" and record["task_uid"] == "game"
+        records = [json.loads(line) for line in Path(log_path).read_text().splitlines()]
+        assert len(records) == trajectory_count
+        assert records[0]["trajectory_id"] == "trace-0"
+        assert records[0]["task_uid"] == "game"
 
 
 def check_persistent_rollout():
