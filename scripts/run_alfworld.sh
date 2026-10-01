@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Edit this one list to select the arms in a suite run.
-algos=(jev graphgpo)
+algos=(jev)
 
 project=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 repo=$project/verl-agent
