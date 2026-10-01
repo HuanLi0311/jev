@@ -632,9 +632,8 @@ class TrajectoryCollector:
                 'steps': steps,
             })
 
-        # ponytail: one batched typed request per trajectory; four concurrent
-        # requests match the already-tested API pressure of the prefix arm.
-        with ThreadPoolExecutor(max_workers=min(4, len(trajectories))) as pool:
+        # ponytail: each completed trajectory is one independent Jev request.
+        with ThreadPoolExecutor(max_workers=len(trajectories)) as pool:
             records = list(pool.map(
                 lambda trajectory: (
                     score_completed_trajectory(key, trajectory, include_reasoning=True)

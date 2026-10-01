@@ -139,8 +139,8 @@ def checkpoint_details(value: str, milestones: list[int]) -> tuple[Path | None, 
 
 def gpu_count() -> int:
     devices = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")
-    if len(devices) not in (2, 4) or any(not item.isdigit() for item in devices):
-        raise ValueError("set CUDA_VISIBLE_DEVICES to two or four GPU indices")
+    if len(devices) != 8 or any(not item.isdigit() for item in devices):
+        raise ValueError("set CUDA_VISIBLE_DEVICES to eight GPU indices")
     if len(set(devices)) != len(devices):
         raise ValueError("GPU indices must be unique")
     return len(devices)

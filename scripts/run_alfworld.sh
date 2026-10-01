@@ -28,7 +28,8 @@ if (( $# == 1 )); then
         exit 2
     }
     IFS=, read -r -a suite_gpus <<< "$CUDA_VISIBLE_DEVICES"
-    required_gpus=$((${#algos[@]} * 2))
+    gpus_per_arm=8
+    required_gpus=$((${#algos[@]} * gpus_per_arm))
     (( ${#suite_gpus[@]} == required_gpus )) || {
         echo "suite requires $required_gpus GPU indices for ${#algos[@]} arms" >&2
         exit 2
@@ -89,17 +90,18 @@ PY
     for selected_seed in "${suite_seeds[@]}"; do
         for arm_index in "${!algos[@]}"; do
             selected_arm=${algos[$arm_index]}
-            slot=$((${#pids[@]} * 2))
-            selected_gpus=${suite_gpus[$slot]},${suite_gpus[$((slot + 1))]}
+            slot=$((arm_index * gpus_per_arm))
+            selected_gpu_list=("${suite_gpus[@]:$slot:$gpus_per_arm}")
+            selected_gpus=$(IFS=,; echo "${selected_gpu_list[*]}")
             run_name=${suite_tag}-${selected_arm}-seed${selected_seed}
             printf 'starting arm=%s seed=%s suite=%s gpus=%s\n' \
                 "$selected_arm" "$selected_seed" "$suite_tag" "$selected_gpus"
             CUDA_VISIBLE_DEVICES=$selected_gpus \
-                RAY_TMPDIR=${RAY_TMPDIR:-/dev/shm}/jev-$run_name \
+                RAY_TMPDIR=/dev/shm/jt-$$-$selected_seed-$selected_arm \
                 "$0" "$selected_arm" "$run_name" "$selected_seed" &
             pids+=("$!")
             names+=("$selected_arm")
-            if (( ${#pids[@]} == 4 || arm_index == ${#algos[@]} - 1 )); then
+            if (( arm_index == ${#algos[@]} - 1 )); then
                 wait_for_jobs || exit 1
             fi
         done
@@ -124,17 +126,18 @@ PY
                         echo "actor checkpoint missing: $checkpoint" >&2
                         exit 2
                     }
-                    slot=$((${#pids[@]} * 2))
-                    selected_gpus=${suite_gpus[$slot]},${suite_gpus[$((slot + 1))]}
+                    slot=$((arm_index * gpus_per_arm))
+                    selected_gpu_list=("${suite_gpus[@]:$slot:$gpus_per_arm}")
+                    selected_gpus=$(IFS=,; echo "${selected_gpu_list[*]}")
                     printf 'starting evaluation arm=%s seed=%s step=%s gpus=%s\n' \
                         "$selected_arm" "$selected_seed" "$milestone" "$selected_gpus"
                     CUDA_VISIBLE_DEVICES=$selected_gpus \
-                        RAY_TMPDIR=${RAY_TMPDIR:-/dev/shm}/jev-$run_name-eval-$milestone \
+                        RAY_TMPDIR=/dev/shm/je-$$-$selected_seed-$selected_arm-$milestone \
                         "$python" "$project/src/evaluator.py" "$checkpoint" "$output" \
                             --config "$run_dir/experiment-config.yaml" &
                     pids+=("$!")
                     names+=("$selected_arm@step$milestone")
-                    if (( ${#pids[@]} == 4 )); then
+                    if (( arm_index == ${#algos[@]} - 1 )); then
                         wait_for_jobs || exit 1
                     fi
                 done
@@ -158,10 +161,10 @@ case $arm in
     *) echo "$usage" >&2; exit 2 ;;
 esac
 [[ $run_tag =~ ^[a-zA-Z0-9_-]+$ ]] || { echo 'invalid run tag' >&2; exit 2; }
-[[ ${CUDA_VISIBLE_DEVICES:-} =~ ^([0-9]+,){1,3}[0-9]+$ ]] || { echo 'set CUDA_VISIBLE_DEVICES to two or four GPU indices' >&2; exit 2; }
+[[ ${CUDA_VISIBLE_DEVICES:-} =~ ^([0-9]+,){7}[0-9]+$ ]] || { echo 'set CUDA_VISIBLE_DEVICES to eight GPU indices' >&2; exit 2; }
 IFS=, read -r -a cuda_devices <<< "$CUDA_VISIBLE_DEVICES"
 gpu_count=${#cuda_devices[@]}
-(( gpu_count == 2 || gpu_count == 4 )) || { echo 'use exactly two or four GPUs' >&2; exit 2; }
+(( gpu_count == 8 )) || { echo 'use exactly eight GPUs' >&2; exit 2; }
 [[ $(printf '%s\n' "${cuda_devices[@]}" | sort -u | wc -l) -eq $gpu_count ]] || { echo 'GPU indices must be unique' >&2; exit 2; }
 
 config_output=$("$python" "$project/scripts/validate_alfworld_config.py" "$config_path" "$seed")
